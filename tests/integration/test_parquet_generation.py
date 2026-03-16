@@ -50,7 +50,7 @@ class TestParquetStructure:
     
     def test_parquet_file_creation(self, tmp_path, mock_obs_seq_dataframes):
         """Test that parquet files are created."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Setup workflow config
         config = {
@@ -88,7 +88,7 @@ class TestParquetStructure:
     
     def test_parquet_contains_required_columns(self, mock_obs_seq_dataframes):
         """Test that parquet output contains all required columns."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Required columns after merging
         required_cols = [

@@ -1,4 +1,4 @@
-"""Model grid and geospatial operations for CrocoCamp workflows."""
+"""Model grid and geospatial operations for model2obs workflows."""
 
 import numpy as np
 import xarray as xr

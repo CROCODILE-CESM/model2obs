@@ -1,4 +1,4 @@
-"""Configuration utilities for CrocoCamp workflows."""
+"""Configuration utilities for model2obs workflows."""
 
 from datetime import timedelta
 import os

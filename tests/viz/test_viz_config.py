@@ -1,7 +1,7 @@
 """Tests for visualization configuration classes."""
 
 import pytest
-from crococamp.viz.viz_config import ProfileConfig, MapConfig
+from model2obs.viz.viz_config import ProfileConfig, MapConfig
 
 
 class TestProfileConfig:

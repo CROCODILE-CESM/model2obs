@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for CrocoCamp test suite.
+"""Shared pytest fixtures for model2obs test suite.
 
 This module provides common fixtures used across all test categories.
 """
@@ -59,7 +59,7 @@ def project_root(test_root: Path) -> Path:
         test_root: Path to test directory root
         
     Returns:
-        Path object pointing to CrocoCamp/ root directory
+        Path object pointing to model2obs/ root directory
     """
     return test_root.parent
 

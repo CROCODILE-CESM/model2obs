@@ -1,4 +1,4 @@
-"""File handling utilities for CrocoCamp workflows."""
+"""File handling utilities for model2obs workflows."""
 
 import glob
 import os

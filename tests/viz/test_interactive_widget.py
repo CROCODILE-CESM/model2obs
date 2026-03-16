@@ -9,7 +9,7 @@ import pandas as pd
 import dask.dataframe as dd
 from unittest.mock import Mock, patch, MagicMock
 
-from crococamp.viz.interactive_widget import InteractiveWidget
+from model2obs.viz.interactive_widget import InteractiveWidget
 
 
 class TestInteractiveWidgetHelperMethods:
@@ -276,4 +276,70 @@ class TestInteractiveWidgetAbstractInterface:
         }
         
         assert expected_methods == abstract_methods
+
+
+class TestInteractiveWidgetGetUnits:
+    """Test get_units method for units formatting."""
+    
+    def test_get_units_temperature_obs(self):
+        """Test units for temperature observation."""
+        mock_widget = Mock(spec=InteractiveWidget)
+        mock_widget.units_dict = {'_TEMPERATURE': 'Celsius', '_SALINITY': 'kg/kg'}
+        mock_widget.units_dims_dict = {'obs': '', 'squared_difference': '^2'}
+        
+        result = InteractiveWidget.get_units(mock_widget, 'FLOAT_TEMPERATURE', 'obs')
+        
+        assert result == 'Celsius'
+    
+    def test_get_units_temperature_squared_difference(self):
+        """Test units for temperature squared difference."""
+        mock_widget = Mock(spec=InteractiveWidget)
+        mock_widget.units_dict = {'_TEMPERATURE': 'Celsius', '_SALINITY': 'kg/kg'}
+        mock_widget.units_dims_dict = {'obs': '', 'squared_difference': '^2'}
+        
+        result = InteractiveWidget.get_units(mock_widget, 'FLOAT_TEMPERATURE', 'squared_difference')
+        
+        assert result == 'Celsius^2'
+    
+    def test_get_units_salinity_obs(self):
+        """Test units for salinity observation."""
+        mock_widget = Mock(spec=InteractiveWidget)
+        mock_widget.units_dict = {'_TEMPERATURE': 'Celsius', '_SALINITY': 'kg/kg'}
+        mock_widget.units_dims_dict = {'obs': ''}
+        
+        result = InteractiveWidget.get_units(mock_widget, 'FLOAT_SALINITY', 'obs')
+        
+        assert result == 'kg/kg'
+    
+    def test_get_units_remove_dimension(self):
+        """Test units when dimension is marked as 'remove'."""
+        mock_widget = Mock(spec=InteractiveWidget)
+        mock_widget.units_dict = {'_TEMPERATURE': 'Celsius'}
+        mock_widget.units_dims_dict = {'normalized_difference': 'remove'}
+        
+        result = InteractiveWidget.get_units(mock_widget, 'FLOAT_TEMPERATURE', 'normalized_difference')
+        
+        assert result == '-'
+    
+    def test_get_units_unknown_obs_type(self):
+        """Test units for unknown observation type returns None."""
+        mock_widget = Mock(spec=InteractiveWidget)
+        mock_widget.units_dict = {'_TEMPERATURE': 'Celsius'}
+        mock_widget.units_dims_dict = {'obs': ''}
+        
+        # Should return None when base_units not found
+        result = InteractiveWidget.get_units(mock_widget, 'UNKNOWN_TYPE', 'obs')
+        
+        assert result is None
+    
+    def test_get_units_unknown_column_returns_none(self):
+        """Test units for unknown column returns None."""
+        mock_widget = Mock(spec=InteractiveWidget)
+        mock_widget.units_dict = {'_TEMPERATURE': 'Celsius'}
+        mock_widget.units_dims_dict = {'obs': ''}
+        
+        # Should return None when dim_units not found
+        result = InteractiveWidget.get_units(mock_widget, 'FLOAT_TEMPERATURE', 'unknown_column')
+        
+        assert result is None
 

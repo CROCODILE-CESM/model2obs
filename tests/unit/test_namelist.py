@@ -1,4 +1,4 @@
-"""Unit tests for crococamp.utils.namelist module.
+"""Unit tests for model2obs.utils.namelist module.
 
 This module tests Fortran namelist file operations for DART integration.
 Namelist correctness is CRITICAL as incorrect generation causes silent DART failures.
@@ -13,7 +13,7 @@ from typing import Dict, List
 
 import pytest
 
-from crococamp.utils.namelist import Namelist
+from model2obs.utils.namelist import Namelist
 
 
 # ============================================================================

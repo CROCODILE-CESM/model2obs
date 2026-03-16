@@ -1,8 +1,8 @@
 # ==========================================
-# CrocoCamp Configuration Template 
+# model2obs Configuration Template 
 # ==========================================
 # This template file contains all the necessary configuration parameters for
-# running CrocoCamp model-observation comparison workflows with ROMS Rutgers
+# running model2obs model-observation comparison workflows with ROMS Rutgers
 # model ouputs. Copy this file and modify the paths below to match your local
 # system setup. For more details, see the README.md file and tutorial notebooks.
 
@@ -29,11 +29,11 @@ obs_seq_in_folder: /path/to/obs/
 # trimmed_obs_folder: Location for observation files trimmed to model grid boundaries
 # parquet_folder: Final output location for processed model-observation comparison data
 # tmp_folder: Folder to store temporary files
-output_folder: $WORK/CrocoCamp_output/workflow_1/out_obs_seq_in/
-input_nml_bck: $WORK/CrocoCamp_output/workflow_1/input_bckp/
-trimmed_obs_folder: $WORK/CrocoCamp_output/workflow_1/out_trimmed_obs_seq_in/
-parquet_folder: $WORK/CrocoCamp_output/workflow_1/out_parquet/
-tmp_folder: $WORK/CrocoCamp_output/workflow_1/tmp/
+output_folder: $WORK/model2obs_output/workflow_1/out_obs_seq_in/
+input_nml_bck: $WORK/model2obs_output/workflow_1/input_bckp/
+trimmed_obs_folder: $WORK/model2obs_output/workflow_1/out_trimmed_obs_seq_in/
+parquet_folder: $WORK/model2obs_output/workflow_1/out_parquet/
+tmp_folder: $WORK/model2obs_output/workflow_1/tmp/
 
 ####### DART CONFIGURATION #######
 # Path to DART's perfect_model_obs executable directory: it should point to your

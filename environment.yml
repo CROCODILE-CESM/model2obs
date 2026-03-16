@@ -1,4 +1,4 @@
-name: crococamp
+name: model2obs
 channels:
   - conda-forge
 dependencies:
@@ -22,6 +22,7 @@ dependencies:
   - shapely<=2.1.2
   - tqdm==4.67.1
   - xarray<=2025.07
+  - pytest
   - pip<=25.2
   - pip:
       - git+https://github.com/NCAR/pyDARTdiags.git@026671693b4240e15f3651f5414af2283cb471a7

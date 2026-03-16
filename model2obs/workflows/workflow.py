@@ -1,4 +1,4 @@
-"""Base Workflow class for CrocoCamp workflow orchestration."""
+"""Base Workflow class for model2obs workflow orchestration."""
 
 import os
 from abc import ABC, abstractmethod
@@ -8,7 +8,7 @@ from ..utils import config as config_utils
 from ..model_adapter.registry import create_model_adapter
 
 class Workflow(ABC):
-    """Base class for all CrocoCamp workflows.
+    """Base class for all model2obs workflows.
     
     Provides common functionality for configuration loading, validation,
     and workflow execution interface.

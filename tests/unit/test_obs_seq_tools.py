@@ -1,4 +1,4 @@
-"""Unit tests for crococamp.io.obs_seq_tools module.
+"""Unit tests for model2obs.io.obs_seq_tools module.
 
 Tests cover observation sequence trimming based on geographical boundaries.
 
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from shapely.geometry import Polygon
 
-from crococamp.io import obs_seq_tools
+from model2obs.io import obs_seq_tools
 
 
 class TestTrimObsSeqIn:

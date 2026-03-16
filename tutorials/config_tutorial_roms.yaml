@@ -1,5 +1,5 @@
 # ==========================================
-# CrocoCamp Configuration for ROMS test
+# model2obs Configuration for ROMS test
 # ==========================================
 
 # Ocean model used to generate files (MOM6 or ROMS_rutgers)

@@ -1,4 +1,4 @@
-"""Unit tests for crococamp.cli.download_crocolake module.
+"""Unit tests for model2obs.cli.download_crocolake module.
 
 Tests cover database code name generation, file download operations,
 ZIP extraction, and error handling for network operations.
@@ -13,7 +13,7 @@ import pytest
 import responses
 from requests.exceptions import HTTPError, ConnectionError, Timeout
 
-from crococamp.cli import download_crocolake
+from model2obs.cli import download_crocolake
 
 
 class TestGetDbCodename:
@@ -88,7 +88,7 @@ class TestDownloadFile:
             headers={'content-length': str(len(content))}
         )
         
-        with patch('crococamp.cli.download_crocolake.tqdm') as mock_tqdm:
+        with patch('model2obs.cli.download_crocolake.tqdm') as mock_tqdm:
             mock_tqdm.return_value.__enter__ = Mock(return_value=Mock())
             mock_tqdm.return_value.__exit__ = Mock(return_value=False)
             
@@ -146,7 +146,7 @@ class TestDownloadFile:
             status=200
         )
         
-        with patch('crococamp.cli.download_crocolake.tqdm') as mock_tqdm:
+        with patch('model2obs.cli.download_crocolake.tqdm') as mock_tqdm:
             mock_tqdm.return_value.__enter__ = Mock(return_value=Mock())
             mock_tqdm.return_value.__exit__ = Mock(return_value=False)
             
@@ -169,7 +169,7 @@ class TestDownloadFile:
             headers={'content-length': str(len(content))}
         )
         
-        with patch('crococamp.cli.download_crocolake.tqdm') as mock_tqdm:
+        with patch('model2obs.cli.download_crocolake.tqdm') as mock_tqdm:
             mock_bar = Mock()
             mock_tqdm.return_value.__enter__ = Mock(return_value=mock_bar)
             mock_tqdm.return_value.__exit__ = Mock(return_value=False)
@@ -250,8 +250,8 @@ class TestMain:
     """Test suite for main() CLI function."""
     
     @responses.activate
-    @patch('crococamp.cli.download_crocolake.unzip_file')
-    @patch('crococamp.cli.download_crocolake.tqdm')
+    @patch('model2obs.cli.download_crocolake.unzip_file')
+    @patch('model2obs.cli.download_crocolake.tqdm')
     def test_main_crocolake_phy_qc(self, mock_tqdm, mock_unzip, tmp_path, monkeypatch):
         """Test main function with CrocoLake PHY QC database."""
         mock_tqdm.return_value.__enter__ = Mock(return_value=Mock())
@@ -283,8 +283,8 @@ class TestMain:
         assert expected_dir.exists()
         assert mock_unzip.called
     
-    @patch('crococamp.cli.download_crocolake.download_file')
-    @patch('crococamp.cli.download_crocolake.unzip_file')
+    @patch('model2obs.cli.download_crocolake.download_file')
+    @patch('model2obs.cli.download_crocolake.unzip_file')
     def test_main_conflicting_qc_flags_raises_error(self, mock_unzip, mock_download, monkeypatch):
         """Test main raises error when both --qc and --noqc are specified."""
         test_args = [
@@ -300,8 +300,8 @@ class TestMain:
             download_crocolake.main()
     
     @responses.activate
-    @patch('crococamp.cli.download_crocolake.unzip_file')
-    @patch('crococamp.cli.download_crocolake.tqdm')
+    @patch('model2obs.cli.download_crocolake.unzip_file')
+    @patch('model2obs.cli.download_crocolake.tqdm')
     def test_main_default_qc_true(self, mock_tqdm, mock_unzip, tmp_path, monkeypatch):
         """Test main defaults to QC=True when no flag specified."""
         mock_tqdm.return_value.__enter__ = Mock(return_value=Mock())
@@ -332,8 +332,8 @@ class TestMain:
         assert expected_dir.exists()
     
     @responses.activate
-    @patch('crococamp.cli.download_crocolake.unzip_file')
-    @patch('crococamp.cli.download_crocolake.tqdm')
+    @patch('model2obs.cli.download_crocolake.unzip_file')
+    @patch('model2obs.cli.download_crocolake.tqdm')
     def test_main_destination_trailing_slash(self, mock_tqdm, mock_unzip, tmp_path, monkeypatch):
         """Test main handles destination with trailing slash."""
         mock_tqdm.return_value.__enter__ = Mock(return_value=Mock())
@@ -364,8 +364,8 @@ class TestMain:
         assert Path(destination).exists()
     
     @responses.activate
-    @patch('crococamp.cli.download_crocolake.unzip_file')
-    @patch('crococamp.cli.download_crocolake.tqdm')
+    @patch('model2obs.cli.download_crocolake.unzip_file')
+    @patch('model2obs.cli.download_crocolake.tqdm')
     def test_main_cleanup_removes_zip(self, mock_tqdm, mock_unzip, tmp_path, monkeypatch, capsys):
         """Test main cleans up downloaded ZIP file after extraction."""
         mock_tqdm.return_value.__enter__ = Mock(return_value=Mock())

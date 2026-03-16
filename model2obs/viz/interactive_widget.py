@@ -120,25 +120,40 @@ class InteractiveWidget(ABC):
         """Create the widget layout for display."""
 
     def get_units(self,obs_type,col_name):
-        """Returns the units of the selected variable"""
+        """Returns the units of the selected variable.
         
+        Args:
+            obs_type: Observation type string (e.g., 'FLOAT_TEMPERATURE')
+            col_name: Column name (e.g., 'obs', 'squared_difference')
+            
+        Returns:
+            str: Formatted units string, or None if units cannot be determined
+        """
         base_units = None
         dim_units = None
         units = None
+        
+        # Find base units from observation type
         for key in self.units_dict:
             if obs_type.endswith(key):
                 base_units = self.units_dict[key]
                 break
         if base_units is None:
             print(f"Warning: no unit found for {obs_type} in {self.units_dict}.")
+            return None
+        
+        # Find dimension modifier from column name
         for key in self.units_dims_dict:
             if col_name == key:
                 dim_units = self.units_dims_dict[key]
                 break
+        
+        # Construct units string
         if dim_units == 'remove':
             units = '-'
         elif dim_units is None:
             print(f"Warning: no unit dimension found for {col_name} in {self.units_dims_dict}.")
+            return None
         else:
             units = base_units + dim_units
 

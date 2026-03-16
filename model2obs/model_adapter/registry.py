@@ -1,4 +1,4 @@
-"""Model adapter registry and factory for CrocoCamp.
+"""Model adapter registry and factory for model2obs.
 
 This module provides the adapter registry and factory function for creating
 model-specific adapter instances. The registry maps ocean model names (case-insensitive)
@@ -9,7 +9,7 @@ Supported models:
     - ROMS_Rutgers: Regional Ocean Modeling System, Rutgers flavour
 
 Usage:
-    from crococamp.model_adapter.registry import create_model_adapter
+    from model2obs.model_adapter.registry import create_model_adapter
     
     # Create adapter from model name
     adapter = create_model_adapter("MOM6")  # Returns ModelAdapterMOM6 instance

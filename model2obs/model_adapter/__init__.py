@@ -1,4 +1,4 @@
-"""ModelAdapter modules for CrocoCamp."""
+"""ModelAdapter modules for model2obs."""
 
 from .model_adapter import ModelAdapter
 from .model_adapter import ModelAdapterCapabilities

@@ -22,11 +22,11 @@ from typing import Any, Dict, List
 from unittest.mock import patch, mock_open
 import xarray as xr
 
-from crococamp.model_adapter.model_adapter import ModelAdapter
-from crococamp.model_adapter.model_adapter_MOM6 import ModelAdapterMOM6
-from crococamp.model_adapter.model_adapter_ROMS_Rutgers import ModelAdapterROMSRutgers
-from crococamp.model_adapter.registry import create_model_adapter
-from crococamp.workflows.workflow_model_obs import RunOptions
+from model2obs.model_adapter.model_adapter import ModelAdapter
+from model2obs.model_adapter.model_adapter_MOM6 import ModelAdapterMOM6
+from model2obs.model_adapter.model_adapter_ROMS_Rutgers import ModelAdapterROMSRutgers
+from model2obs.model_adapter.registry import create_model_adapter
+from model2obs.workflows.workflow_model_obs import RunOptions
 
 
 class TestModelAdapterRegistry:

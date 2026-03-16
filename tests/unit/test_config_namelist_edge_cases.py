@@ -8,8 +8,8 @@ import os
 from pathlib import Path
 import pytest
 
-from crococamp.utils import config
-from crococamp.utils.namelist import Namelist
+from model2obs.utils import config
+from model2obs.utils.namelist import Namelist
 
 
 class TestConfigEdgeCases:

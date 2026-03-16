@@ -140,7 +140,7 @@ class TestWorkflowModelObsInitialization:
     
     def test_init_with_valid_config(self, workflow_config):
         """Test initialization with valid configuration."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         workflow = WorkflowModelObs(workflow_config)
         
@@ -150,7 +150,7 @@ class TestWorkflowModelObsInitialization:
     
     def test_init_validates_required_keys(self):
         """Test that initialization validates required keys."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         incomplete_config = {'ocean_model': 'MOM6', 'model_files_folder': '/path'}
         
@@ -159,7 +159,7 @@ class TestWorkflowModelObsInitialization:
     
     def test_init_cleans_old_log_file(self, workflow_config, tmp_path):
         """Test that initialization removes old log files."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Create old log file
         log_file = Path("perfect_model_obs.log")
@@ -187,7 +187,7 @@ class TestWorkflowModelObsProcessFiles:
     @patch('subprocess.run')
     def test_process_files_basic(self, mock_run, mock_popen, workflow_config, mock_obs_seq_files, tmp_path):
         """Test basic file processing with mocked subprocesses."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Mock successful ncks execution
         mock_run.return_value = Mock(returncode=0)
@@ -212,7 +212,7 @@ class TestWorkflowModelObsProcessFiles:
         mock_popen.side_effect = pmo_side_effect
         
         # Skip trimming for simplicity
-        with patch('crococamp.io.obs_seq_tools.trim_obs_seq_in'):
+        with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             workflow = WorkflowModelObs(workflow_config)
             
             # Run workflow (without parquet conversion)
@@ -225,7 +225,7 @@ class TestWorkflowModelObsProcessFiles:
     @patch('subprocess.run')
     def test_process_files_with_time_matching(self, mock_run, mock_popen, workflow_config, mock_obs_seq_files):
         """Test file processing with time matching enabled."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Setup mocks
         mock_run.return_value = Mock(returncode=0)
@@ -234,7 +234,7 @@ class TestWorkflowModelObsProcessFiles:
         mock_proc.wait.return_value = None
         mock_popen.return_value = mock_proc
         
-        with patch('crococamp.io.obs_seq_tools.trim_obs_seq_in'):
+        with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             workflow = WorkflowModelObs(workflow_config)
             
             # Process with time matching (default)
@@ -248,7 +248,7 @@ class TestWorkflowModelObsProcessFiles:
     @patch('subprocess.Popen')
     def test_process_files_subprocess_failure(self, mock_popen, workflow_config, mock_obs_seq_files):
         """Test handling of perfect_model_obs subprocess failure."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Mock failed perfect_model_obs
         mock_proc = Mock()
@@ -258,7 +258,7 @@ class TestWorkflowModelObsProcessFiles:
         mock_proc.stderr.read.return_value = "DART error"
         mock_popen.return_value = mock_proc
         
-        with patch('crococamp.io.obs_seq_tools.trim_obs_seq_in'):
+        with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             with patch('subprocess.run', return_value=Mock(returncode=0)):
                 workflow = WorkflowModelObs(workflow_config)
                 
@@ -272,7 +272,7 @@ class TestWorkflowModelObsParquetGeneration:
     
     def test_merge_model_obs_to_parquet_basic(self, workflow_config, tmp_path):
         """Test basic parquet generation from obs_seq files."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Create mock obs_seq output files
         output_folder = Path(workflow_config['output_folder'])
@@ -308,7 +308,7 @@ class TestWorkflowModelObsRunMethod:
     @patch('subprocess.run')
     def test_run_complete_workflow(self, mock_run, mock_popen, workflow_config, mock_obs_seq_files):
         """Test running the complete workflow."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Setup mocks
         mock_run.return_value = Mock(returncode=0)
@@ -317,7 +317,7 @@ class TestWorkflowModelObsRunMethod:
         mock_proc.wait.return_value = None
         mock_popen.return_value = mock_proc
         
-        with patch('crococamp.io.obs_seq_tools.trim_obs_seq_in'):
+        with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             with patch.object(WorkflowModelObs, 'merge_model_obs_to_parquet'):
                 workflow = WorkflowModelObs(workflow_config)
                 
@@ -334,7 +334,7 @@ class TestWorkflowModelObsRunMethod:
     
     def test_run_parquet_only_mode(self, workflow_config):
         """Test running workflow in parquet-only mode."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         with patch.object(WorkflowModelObs, 'merge_model_obs_to_parquet') as mock_parquet:
             workflow = WorkflowModelObs(workflow_config)
@@ -346,14 +346,14 @@ class TestWorkflowModelObsRunMethod:
     
     def test_run_with_clear_output(self, workflow_config, tmp_path):
         """Test running workflow with output clearing."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Create some files in output folders
         parquet_folder = Path(workflow_config['parquet_folder'])
         test_file = parquet_folder / "old_data.parquet"
         test_file.write_text("old data")
         
-        with patch('crococamp.utils.config.clear_folder') as mock_clear:
+        with patch('model2obs.utils.config.clear_folder') as mock_clear:
             with patch.object(WorkflowModelObs, 'process_files', return_value=0):
                 with patch.object(WorkflowModelObs, 'merge_model_obs_to_parquet'):
                     workflow = WorkflowModelObs(workflow_config)
@@ -378,7 +378,7 @@ class TestWorkflowModelObsNamelistOperations:
     
     def test_initialize_model_namelist(self, workflow_config, tmp_path):
         """Test initialization of input.nml for DART."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Change to tmp directory so input.nml is created there
         original_dir = os.getcwd()
@@ -401,7 +401,7 @@ class TestWorkflowModelObsDataFrameAccess:
     
     def test_get_all_model_obs_df(self, workflow_config):
         """Test getting all model-obs comparison data."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         import dask.dataframe as dd
         
         workflow = WorkflowModelObs(workflow_config)
@@ -421,7 +421,7 @@ class TestWorkflowModelObsDataFrameAccess:
     
     def test_get_good_model_obs_df(self, workflow_config):
         """Test getting only good quality observations."""
-        from crococamp.workflows.workflow_model_obs import WorkflowModelObs
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         workflow = WorkflowModelObs(workflow_config)
         

@@ -1,4 +1,4 @@
-from crococamp.workflows import WorkflowModelObs
+from model2obs.workflows import WorkflowModelObs
 
 # interpolate model onto obs space for the single float
 workflow_float = WorkflowModelObs.from_config_file('config_tutorial_2.yaml')
