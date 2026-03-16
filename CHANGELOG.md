@@ -1,6 +1,10 @@
-# CrocoCamp Changelog
+# model2obs Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [0.4.0] - 2026-03-16
+- CrocoCamp is renamed to model2obs
+- Tests for interactive widgets are added
 
 ## [0.3.0] - 2025-12-22
 - Add basic support for ROMS Rutgers model output
