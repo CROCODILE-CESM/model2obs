@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 import dask.dataframe as dd
 
-from crococamp.workflows import workflow_model_obs
+from model2obs.workflows import workflow_model_obs
 
 
 class TestMergePairToParquet:
@@ -94,7 +94,7 @@ class TestMergePairToParquet:
         
         np.testing.assert_array_equal(hash1, hash2)
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_merge_pair_basic(self, mock_obsq, workflow, mock_obs_dataframes, tmp_path):
         """Test basic merge of observation pairs."""
         model_df = mock_obs_dataframes['model'].copy()
@@ -119,7 +119,7 @@ class TestMergePairToParquet:
         parquet_files = list(parquet_path.glob("*.parquet"))
         assert len(parquet_files) > 0
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_diagnostic_columns_calculated(self, mock_obsq, workflow, mock_obs_dataframes, tmp_path):
         """Test that all diagnostic columns are calculated correctly."""
         model_df = mock_obs_dataframes['model'].copy()
@@ -149,7 +149,7 @@ class TestMergePairToParquet:
         assert 'normalized_difference' in result.columns
         assert 'log_likelihood' in result.columns
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_diagnostic_difference_calculation(self, mock_obsq, workflow, mock_obs_dataframes, tmp_path):
         """Test difference = obs - model calculation."""
         model_df = mock_obs_dataframes['model'].copy()
@@ -176,7 +176,7 @@ class TestMergePairToParquet:
         expected_diff = result['obs'] - result['interpolated_model']
         np.testing.assert_allclose(result['difference'], expected_diff, rtol=1e-10)
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_diagnostic_normalized_difference(self, mock_obsq, workflow, mock_obs_dataframes, tmp_path):
         """Test normalized_difference = difference / sqrt(obs_err_var)."""
         model_df = mock_obs_dataframes['model'].copy()
@@ -203,7 +203,7 @@ class TestMergePairToParquet:
         expected_norm = result['difference'] / np.sqrt(result['obs_err_var'])
         np.testing.assert_allclose(result['normalized_difference'], expected_norm, rtol=1e-10)
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_diagnostic_log_likelihood(self, mock_obsq, workflow, mock_obs_dataframes, tmp_path):
         """Test log_likelihood calculation."""
         model_df = mock_obs_dataframes['model'].copy()
@@ -233,7 +233,7 @@ class TestMergePairToParquet:
         )
         np.testing.assert_allclose(result['log_likelihood'], expected_ll, rtol=1e-10)
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_column_ordering(self, mock_obsq, workflow, mock_obs_dataframes, tmp_path):
         """Test that columns are ordered correctly in output."""
         model_df = mock_obs_dataframes['model'].copy()
@@ -264,7 +264,7 @@ class TestMergePairToParquet:
         actual_first_cols = result.columns[:len(expected_first_cols)].tolist()
         assert actual_first_cols == expected_first_cols
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_multiple_observation_columns_raises_error(self, mock_obsq, workflow, tmp_path):
         """Test that multiple observation columns raise ValueError."""
         model_df = pd.DataFrame({
@@ -293,7 +293,7 @@ class TestMergePairToParquet:
                 str(parquet_path)
             )
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_multiple_qc_columns_raises_error(self, mock_obsq, workflow, tmp_path):
         """Test that multiple QC columns raise ValueError."""
         obs_df = pd.DataFrame({
@@ -325,7 +325,7 @@ class TestMergePairToParquet:
                 str(parquet_path)
             )
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_reference_column_mismatch_raises_error(self, mock_obsq, workflow, tmp_path):
         """Test that mismatched reference columns raise ValueError."""
         model_df = pd.DataFrame({
@@ -363,7 +363,7 @@ class TestMergePairToParquet:
                 str(parquet_path)
             )
     
-    @patch('crococamp.workflows.workflow_model_obs.obsq.ObsSequence')
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
     def test_sorting_by_time_position_depth(self, mock_obsq, workflow, mock_obs_dataframes, tmp_path):
         """Test that results are sorted by time, position, depth."""
         model_df = mock_obs_dataframes['model'].copy()
@@ -428,12 +428,12 @@ class TestMergeModelObsToParquet:
         }
         return workflow_model_obs.WorkflowModelObs(config)
     
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.dd.read_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.dd.read_parquet')
     def test_merge_creates_parquet_files(self, mock_read, mock_failed, mock_good, mock_all,
                                         mock_set_df, mock_merge, workflow_with_files, capsys):
         """Test that merge_model_obs_to_parquet creates parquet files."""
@@ -453,12 +453,12 @@ class TestMergeModelObsToParquet:
         assert "Succesfull interpolations" in captured.out
         assert "Failed interpolations" in captured.out
     
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.dd.read_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.dd.read_parquet')
     def test_merge_uses_trimmed_obs_folder(self, mock_read, mock_failed, mock_good, mock_all,
                                           mock_set_df, mock_merge, tmp_path):
         """Test that trim_obs=True uses trimmed_obs_folder."""
@@ -498,12 +498,12 @@ class TestMergeModelObsToParquet:
         call_args = mock_merge.call_args_list[0][0]
         assert "trimmed" in call_args[1]
     
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.dd.read_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.dd.read_parquet')
     def test_merge_prints_statistics(self, mock_read, mock_set_df, mock_failed, mock_good, mock_all, 
                                      mock_merge, workflow_with_files, capsys):
         """Test that merge prints observation statistics."""
@@ -522,12 +522,12 @@ class TestMergeModelObsToParquet:
         assert "Succesfull interpolations" in captured.out
         assert "Failed interpolations" in captured.out
     
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.dd.read_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.dd.read_parquet')
     def test_merge_cleans_up_tmp_folder(self, mock_read, mock_failed, mock_good, mock_all,
                                        mock_set_df, mock_merge, workflow_with_files, tmp_path):
         """Test that temporary parquet folder is cleaned up."""
@@ -544,12 +544,12 @@ class TestMergeModelObsToParquet:
         tmp_folder = Path(workflow_with_files.config['parquet_folder']) / "tmp"
         assert not tmp_folder.exists()
     
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
-    @patch('crococamp.workflows.workflow_model_obs.dd.read_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._merge_pair_to_parquet')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs._set_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_all_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_good_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.WorkflowModelObs.get_failed_model_obs_df')
+    @patch('model2obs.workflows.workflow_model_obs.dd.read_parquet')
     def test_merge_repartitions_output(self, mock_read, mock_failed, mock_good, mock_all,
                                        mock_set_df, mock_merge, workflow_with_files):
         """Test that output is repartitioned to 300MB chunks."""

@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, List
 if TYPE_CHECKING:
-    from crococamp.workflows.types import RunOptions
+    from model2obs.workflows.types import RunOptions
 
 from abc import ABC, abstractmethod
 from contextlib import contextmanager

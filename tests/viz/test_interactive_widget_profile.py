@@ -5,8 +5,8 @@ import pandas as pd
 import dask.dataframe as dd
 from unittest.mock import Mock, patch, MagicMock
 
-from crococamp.viz.interactive_widget_profile import InteractiveWidgetProfile
-from crococamp.viz.viz_config import ProfileConfig
+from model2obs.viz.interactive_widget_profile import InteractiveWidgetProfile
+from model2obs.viz.viz_config import ProfileConfig
 
 
 class TestProfileWidgetInitialization:

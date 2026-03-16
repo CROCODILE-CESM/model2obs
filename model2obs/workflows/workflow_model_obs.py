@@ -1,4 +1,4 @@
-"""Model-observation comparison workflow for CrocoCamp."""
+"""Model-observation comparison workflow for model2obs."""
 
 from datetime import timedelta
 import glob
@@ -46,7 +46,7 @@ class WorkflowModelObs(workflow.Workflow):
         """
 
         super().__init__(config)
-        self.input_nml_template = files('crococamp.utils').joinpath('input_template.nml')
+        self.input_nml_template = files('model2obs.utils').joinpath('input_template.nml')
         self.model_obs_df = None
         self.perfect_model_obs_log_file = "perfect_model_obs.log"
         if os.path.isfile(self.perfect_model_obs_log_file):

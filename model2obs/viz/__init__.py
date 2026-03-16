@@ -1,4 +1,4 @@
-"""Visualization tools for CrocoCamp data analysis.
+"""Visualization tools for model2obs data analysis.
 
 This module provides interactive visualization widgets for analyzing
 model-observation comparisons with support for both dask and pandas DataFrames.

@@ -13,7 +13,7 @@ import xarray as xr
 import pandas as pd
 from datetime import timedelta
 
-from crococamp.workflows.workflow_model_obs import WorkflowModelObs, RunOptions
+from model2obs.workflows.workflow_model_obs import WorkflowModelObs, RunOptions
 
 
 @pytest.fixture
@@ -86,7 +86,7 @@ class TestGetRequiredConfigKeys:
 class TestRunMethod:
     """Tests for run() method."""
     
-    @patch('crococamp.workflows.workflow_model_obs.config_utils.clear_folder')
+    @patch('model2obs.workflows.workflow_model_obs.config_utils.clear_folder')
     @patch.object(WorkflowModelObs, 'merge_model_obs_to_parquet')
     @patch.object(WorkflowModelObs, 'process_files')
     def test_run_with_clear_output(self, mock_process, mock_merge, mock_clear, base_config, tmp_path, capsys):
@@ -208,8 +208,8 @@ class TestProcessFiles:
     @patch.object(WorkflowModelObs, '_process_model_obs_pair')
     @patch.object(WorkflowModelObs, '_print_workflow_config')
     @patch.object(WorkflowModelObs, '_initialize_model_namelist')
-    @patch('crococamp.workflows.workflow_model_obs.file_utils.get_sorted_files')
-    @patch('crococamp.model_adapter.model_adapter_MOM6.ModelAdapterMOM6.validate_paths')
+    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_sorted_files')
+    @patch('model2obs.model_adapter.model_adapter_MOM6.ModelAdapterMOM6.validate_paths')
     def test_process_files_no_matching_mode(self, mock_validate_paths, mock_get_files, 
                                            mock_init_nml, mock_print, mock_process_pair, 
                                            tmp_path):
@@ -309,7 +309,7 @@ class TestValidateWorkflowPaths:
 class TestInitializeModelNamelist:
     """Tests for _initialize_model_namelist() method."""
     
-    @patch('crococamp.workflows.workflow_model_obs.namelist.Namelist')
+    @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist')
     def test_initialize_model_namelist_basic_params(self, mock_namelist_class, tmp_path):
         """Test _initialize_model_namelist sets basic namelist parameters."""
         config = {
@@ -334,8 +334,8 @@ class TestInitializeModelNamelist:
         assert workflow._namelist == mock_nml
         assert mock_nml.update_namelist_param.call_count >= 5
     
-    @patch('crococamp.workflows.workflow_model_obs.config_utils.validate_and_expand_obs_types')
-    @patch('crococamp.workflows.workflow_model_obs.namelist.Namelist')
+    @patch('model2obs.workflows.workflow_model_obs.config_utils.validate_and_expand_obs_types')
+    @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist')
     def test_initialize_model_namelist_with_obs_types(self, mock_namelist_class, 
                                                      mock_validate_obs, tmp_path, capsys):
         """Test _initialize_model_namelist processes use_these_obs config."""
@@ -364,8 +364,8 @@ class TestInitializeModelNamelist:
         assert "Processing observation types" in captured.out
         mock_validate_obs.assert_called_once()
     
-    @patch('crococamp.workflows.workflow_model_obs.config_utils.validate_and_expand_obs_types')
-    @patch('crococamp.workflows.workflow_model_obs.namelist.Namelist')
+    @patch('model2obs.workflows.workflow_model_obs.config_utils.validate_and_expand_obs_types')
+    @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist')
     def test_initialize_model_namelist_obs_types_error_handling(self, mock_namelist_class,
                                                                 mock_validate_obs, tmp_path, capsys):
         """Test _initialize_model_namelist handles obs_types validation errors."""
@@ -399,8 +399,8 @@ class TestProcessModelObsPair:
     """Tests for _process_model_obs_pair() method."""
     
     @patch('subprocess.Popen')
-    @patch('crococamp.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
-    @patch('crococamp.workflows.workflow_model_obs.obs_seq_tools.trim_obs_seq_in')
+    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
+    @patch('model2obs.workflows.workflow_model_obs.obs_seq_tools.trim_obs_seq_in')
     def test_process_model_obs_pair_with_trimming(self, mock_trim, mock_get_time,
                                                   mock_popen, tmp_path, capsys):
         """Test _process_model_obs_pair with trim_obs=True."""
@@ -448,7 +448,7 @@ class TestProcessModelObsPair:
         assert "Calling perfect_model_obs" in captured.out
     
     @patch('subprocess.Popen')
-    @patch('crococamp.workflows.workflow_model_obs.file_utils.get_obs_time_in_days_seconds')
+    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_obs_time_in_days_seconds')
     def test_process_model_obs_pair_force_obs_time(self, mock_get_obs_time, mock_popen, tmp_path):
         """Test _process_model_obs_pair with force_obs_time=True uses obs time."""
         config = {
@@ -493,7 +493,7 @@ class TestProcessModelObsPair:
         )
     
     @patch('subprocess.Popen')
-    @patch('crococamp.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
+    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
     def test_process_model_obs_pair_subprocess_error(self, mock_get_time, mock_popen, tmp_path):
         """Test _process_model_obs_pair raises error on subprocess failure."""
         config = {

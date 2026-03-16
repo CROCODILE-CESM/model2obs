@@ -6,8 +6,8 @@ import dask.dataframe as dd
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
-from crococamp.viz.interactive_widget_map import InteractiveWidgetMap
-from crococamp.viz.viz_config import MapConfig
+from model2obs.viz.interactive_widget_map import InteractiveWidgetMap
+from model2obs.viz.viz_config import MapConfig
 
 
 class TestMapWidgetInitialization:

@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch, Mock, MagicMock
 from io import StringIO
 
-from crococamp.cli import perfect_model_obs
+from model2obs.cli import perfect_model_obs
 
 
 class TestArgumentParsing:

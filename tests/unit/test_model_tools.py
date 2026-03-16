@@ -1,4 +1,4 @@
-"""Unit tests for crococamp.io.model_tools module.
+"""Unit tests for model2obs.io.model_tools module.
 
 Tests cover model grid boundary extraction and convex hull computation.
 """
@@ -10,7 +10,7 @@ import pytest
 import xarray as xr
 from shapely.geometry import Polygon
 
-from crococamp.io import model_tools
+from model2obs.io import model_tools
 
 
 class TestGetModelBoundaries:

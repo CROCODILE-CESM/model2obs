@@ -9,7 +9,7 @@ import pandas as pd
 import dask.dataframe as dd
 from unittest.mock import Mock, patch, MagicMock
 
-from crococamp.viz.interactive_widget import InteractiveWidget
+from model2obs.viz.interactive_widget import InteractiveWidget
 
 
 class TestInteractiveWidgetHelperMethods:

@@ -1,4 +1,4 @@
-"""Workflow modules for CrocoCamp."""
+"""Workflow modules for model2obs."""
 
 from .workflow import Workflow
 from .workflow_model_obs import WorkflowModelObs

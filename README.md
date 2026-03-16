@@ -1,8 +1,8 @@
-# CrocoCamp
+# model2obs
 
-**CrocoCamp** is a Python toolset for comparing ocean model outputs and observation datasets. It streamlines workflows for interpolating model data into the observation space, producing tabular data in Parquet format ready for analysis and interactive visualization.
+**model2obs** is a Python toolset for comparing ocean model outputs and observation datasets. It streamlines workflows for interpolating model data into the observation space, producing tabular data in Parquet format ready for analysis and interactive visualization.
 
-**New in December 2025:** CrocoCamp now supports **ROMS (Regional Ocean Modeling System)** in addition to MOM6, with a flexible model adapter architecture that enables easy extension to other ocean models. The new architecture abstracts model-specific operations (file I/O, unit conversions, configuration requirements) into dedicated adapters, making the codebase more maintainable and extensible.
+**New in December 2025:** model2obs now supports **ROMS (Regional Ocean Modeling System)** in addition to MOM6, with a flexible model adapter architecture that enables easy extension to other ocean models. The new architecture abstracts model-specific operations (file I/O, unit conversions, configuration requirements) into dedicated adapters, making the codebase more maintainable and extensible.
 
 ## Summary
 
@@ -46,10 +46,10 @@ DART (Data Assimilation Research Testbed) is required to run the `perfect_model_
 
 ### Installation Steps
 
-#### 1. Clone CrocoCamp
+#### 1. Clone model2obs
 ```bash
-git clone https://github.com/CROCODILE-CESM/CrocoCamp.git
-cd CrocoCamp/install
+git clone https://github.com/CROCODILE-CESM/model2obs.git
+cd model2obs/install
 ```
 
 #### 2. Configure Environment Paths
@@ -62,7 +62,7 @@ cp envpaths.sh.template envpaths.sh
 
 Edit `envpaths.sh` to set:
 - `DART_ROOT_PATH`: Path to your DART installation (e.g., `/path/to/DART/`)
-- `CONDA_ENV_NAME`: Name for your conda environment (e.g., `crococamp`)
+- `CONDA_ENV_NAME`: Name for your conda environment (e.g., `model2obs`)
 
 **Note for NCAR HPC Users:** You can use the pre-configured `envpaths_NCAR.sh` and `install_NCAR.sh` which are already set up with NCAR-specific paths.
 
@@ -82,7 +82,7 @@ To also download tutorial datasets from Zenodo:
 #### 4. Activate the Environment
 
 ```bash
-conda activate crococamp  # or your chosen environment name
+conda activate model2obs  # or your chosen environment name
 ```
 
 The installation script will:
@@ -94,7 +94,7 @@ The installation script will:
 
 ## Getting Started
 
-The best way to learn CrocoCamp is through the hands-on tutorials in the `tutorials/` folder. Demo data is available for download during installation for MOM6 workflows. The Jupyter notebooks guide you through:
+The best way to learn model2obs is through the hands-on tutorials in the `tutorials/` folder. Demo data is available for download during installation for MOM6 workflows. The Jupyter notebooks guide you through:
 
 **MOM6 - Tutorial 1** (`tutorial1_MOM6-CL-comparison.ipynb`): 
 - Setting up a basic model-observation comparison workflow
@@ -148,7 +148,7 @@ Note that DART needs to be compiled separately on Derecho and Casper, so we prov
 
 ### Observation Types Configuration
 
-CrocoCamp supports automatic configuration of [observation types for DART]([url](https://github.com/NCAR/DART/blob/main/observations/forward_operators/obs_def_ocean_mod.rst)) assimilation through the `use_these_obs` field in your configuration file.
+model2obs supports automatic configuration of [observation types for DART]([url](https://github.com/NCAR/DART/blob/main/observations/forward_operators/obs_def_ocean_mod.rst)) assimilation through the `use_these_obs` field in your configuration file.
 
 #### Using specific observation types
 
@@ -177,7 +177,7 @@ use_these_obs:
   - ALL_SALINITY       # Includes all salinity-related obs types  
 ```
 
-In this case, CrocoCamp builds a dictionary of all the supported temperature and salinity observation types in DART, and will look for all of those types in the observation sequence files you provided.
+In this case, model2obs builds a dictionary of all the supported temperature and salinity observation types in DART, and will look for all of those types in the observation sequence files you provided.
 
 ### Time window
 
@@ -262,7 +262,7 @@ Both widgets below support both pandas and dask DataFrames.
 For Python scripts and Jupyter notebooks, use the class-based API:
 
 ```python
-from crococamp.workflows import WorkflowModelObs
+from model2obs.workflows import WorkflowModelObs
 
 # Load workflow from configuration file
 workflow = WorkflowModelObs.from_config_file("config.yaml")
@@ -348,18 +348,18 @@ perfect-model-obs -c config.yaml --parquet-only
 
 ## How to Cite
 
-If you use CrocoCamp in your research, please cite it as:
+If you use model2obs in your research, please cite it as:
 
-Milanese, E. (2025). CrocoCamp. Zenodo. https://doi.org/10.5281/zenodo.17336480
+Milanese, E. (2025). model2obs. Zenodo. https://doi.org/10.5281/zenodo.17336480
 
 For reproducibility and traceability, it is recommended that in your work you also specify the version you used (e.g. v0.2.0); each version also has a unique doi in Zenodo.
 
 ### BibTeX Entry
 
 ```bibtex
-@software{crococamp,
+@software{model2obs,
   author       = {Milanese, Enrico},
-  title        = {CrocoCamp},
+  title        = {model2obs},
   year         = {2025},
   publisher    = {Zenodo},
   doi          = {10.5281/zenodo.17336480},

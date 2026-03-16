@@ -1,5 +1,5 @@
 [project]
-name = "crococamp"
+name = "model2obs"
 version = "0.3.0"
 description = "Python package for comparing ocean models with observations."
 authors = [{ name="Enrico Milanese", email="enrico.milanese@whoi.edu" }]
@@ -28,9 +28,9 @@ dependencies = [
 ]
 
 [project.scripts]
-download_crocolake = "crococamp.cli.download_crocolake:main"
-download_tutorials_data = "crococamp.cli.download_tutorials_data:main"
-perfect-model-obs = "crococamp.cli.perfect_model_obs:main"
+download_crocolake = "model2obs.cli.download_crocolake:main"
+download_tutorials_data = "model2obs.cli.download_tutorials_data:main"
+perfect-model-obs = "model2obs.cli.perfect_model_obs:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -38,10 +38,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["crococamp*"]
+include = ["model2obs*"]
 
 [tool.setuptools.package-data]
-"crococamp" = ["utils/*.nml"]
+"model2obs" = ["utils/*.nml"]
 
 [project.optional-dependencies]
 test = [
@@ -70,7 +70,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["crococamp"]
+source = ["model2obs"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

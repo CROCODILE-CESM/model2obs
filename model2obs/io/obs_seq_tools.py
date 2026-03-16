@@ -1,4 +1,4 @@
-"""Observation sequence handling utilities for CrocoCamp workflows."""
+"""Observation sequence handling utilities for model2obs workflows."""
 
 import numpy as np
 import pydartdiags.obs_sequence.obs_sequence as obsq

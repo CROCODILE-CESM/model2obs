@@ -8,7 +8,7 @@ import pytest
 from typing import Any, Dict, List
 from unittest.mock import patch, mock_open, MagicMock
 
-from crococamp.workflows.workflow import Workflow
+from model2obs.workflows.workflow import Workflow
 
 
 class ConcreteWorkflow(Workflow):
@@ -58,7 +58,7 @@ class TestWorkflowInit:
         """Test initialization stores configuration correctly."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             
             assert workflow.config == config
@@ -71,7 +71,7 @@ class TestWorkflowInit:
             'ocean_model': 'MOM6'
         }
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(KeyError, match="Required keys missing from config"):
                 ConcreteWorkflow(config)
     
@@ -143,7 +143,7 @@ time_window:
   days: 1
 """)
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(KeyError, match="Required keys missing from config"):
                 ConcreteWorkflow.from_config_file(str(config_file))
     
@@ -159,7 +159,7 @@ time_window:
   days: 1
 """)
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow.from_config_file(
                 str(config_file),
                 parquet_folder='overridden'
@@ -179,7 +179,7 @@ time_window:
   days: 1
 """)
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow.from_config_file(
                 str(config_file),
                 new_key='new_value'
@@ -212,7 +212,7 @@ class TestWorkflowConfigMethods:
         """Test getting existing configuration value."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             assert workflow.get_config('key1') == 'value1'
     
@@ -220,7 +220,7 @@ class TestWorkflowConfigMethods:
         """Test getting missing key returns default value."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             assert workflow.get_config('nonexistent', 'default') == 'default'
     
@@ -228,7 +228,7 @@ class TestWorkflowConfigMethods:
         """Test getting missing key without default returns None."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             assert workflow.get_config('nonexistent') is None
     
@@ -236,7 +236,7 @@ class TestWorkflowConfigMethods:
         """Test setting new configuration key."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             workflow.set_config('key3', 'value3')
             
@@ -247,7 +247,7 @@ class TestWorkflowConfigMethods:
         """Test overwriting existing configuration key."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             workflow.set_config('key1', 'new_value')
             
@@ -257,7 +257,7 @@ class TestWorkflowConfigMethods:
         """Test setting configuration values of various types."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             workflow.set_config('int_val', 42)
             workflow.set_config('list_val', [1, 2, 3])
@@ -277,7 +277,7 @@ class TestWorkflowRun:
         """Test that run method executes."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             result = workflow.run()
             
@@ -294,7 +294,7 @@ class TestWorkflowAbstractMethods:
         
         config = {'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(TypeError, match="Can't instantiate abstract class"):
                 IncompleteWorkflow(config)
 
@@ -306,7 +306,7 @@ class TestWorkflowPrintConfig:
         """Test that print_config displays configuration."""
         config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             workflow.print_config()
             
@@ -320,7 +320,7 @@ class TestWorkflowPrintConfig:
         mock_model_adapter.get_required_config_keys.return_value = []
         config = {'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             workflow.print_config()
             
@@ -335,7 +335,7 @@ class TestWorkflowValidation:
         """Test that _validate_config is called during initialization."""
         config = {'key1': 'value1', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(KeyError, match="Required keys missing from config"):
                 ConcreteWorkflow(config)
     
@@ -343,7 +343,7 @@ class TestWorkflowValidation:
         """Test validation passes with all required keys present."""
         config = {'key1': 'value1', 'key2': 'value2', 'extra': 'allowed', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
             assert workflow.config == config
     
@@ -351,7 +351,7 @@ class TestWorkflowValidation:
         """Test validation error message with multiple missing keys."""
         config = {'key3': 'value3', 'ocean_model': 'MOM6'}
         
-        with patch('crococamp.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
+        with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(KeyError) as excinfo:
                 ConcreteWorkflow(config)
             

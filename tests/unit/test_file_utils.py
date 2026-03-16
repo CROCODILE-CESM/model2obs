@@ -1,4 +1,4 @@
-"""Unit tests for crococamp.io.file_utils module.
+"""Unit tests for model2obs.io.file_utils module.
 
 Tests cover file discovery, timestamp conversions, and time extraction from model/obs files.
 """
@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from crococamp.io import file_utils
+from model2obs.io import file_utils
 
 
 class TestGetSortedFiles:

@@ -1,4 +1,4 @@
-"""Namelist file utilities for CrocoCamp workflows."""
+"""Namelist file utilities for model2obs workflows."""
 
 import os
 import re

@@ -1,4 +1,4 @@
-name: crococamp
+name: model2obs
 channels:
   - conda-forge
 dependencies:

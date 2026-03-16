@@ -1,4 +1,4 @@
-"""Unit tests for crococamp.utils.config module.
+"""Unit tests for model2obs.utils.config module.
 
 This module tests configuration file loading, validation, and processing.
 Configuration correctness is CRITICAL as invalid configs cause workflow failures.
@@ -14,7 +14,7 @@ from datetime import timedelta
 import pytest
 import yaml
 
-from crococamp.utils import config
+from model2obs.utils import config
 
 
 class TestReadConfig:
