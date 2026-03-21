@@ -1,12 +1,14 @@
 """Model-observation comparison workflow for model2obs."""
 
+import concurrent.futures
 from datetime import timedelta
 import glob
 from importlib.resources import files
 import os
 import shutil
 import subprocess
-from typing import Any, List, Optional, Dict, Union
+import tempfile
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.dataframe as dd
 import numpy as np
@@ -54,7 +56,7 @@ class WorkflowModelObs(workflow.Workflow):
 
     def run(self, trim_obs: bool = True, no_matching: bool = False,
             force_obs_time: bool = False, parquet_only: bool = False,
-            clear_output: bool = False) -> int:
+            clear_output: bool = False, parallel: bool = False) -> int:
         """Execute the complete model-observation workflow.
         
         Args:
@@ -63,6 +65,11 @@ class WorkflowModelObs(workflow.Workflow):
             force_obs_time: Whether to assign observations reference time to model files
             parquet_only: Whether to skip building perfect obs and directly convert to parquet
             clear_output: Whether to clear output folder before running the workflow (default: False)
+            parallel: Whether to process model files in parallel using
+                :class:`concurrent.futures.ThreadPoolExecutor`.  When ``True``,
+                one worker thread is dispatched per model output file and pairs
+                within each file are processed sequentially inside that worker.
+                Defaults to ``False`` (serial execution).
             
         Returns:
             Number of files processed
@@ -95,7 +102,8 @@ class WorkflowModelObs(workflow.Workflow):
             files_processed = self.process_files(
                 trim_obs=trim_obs,
                 no_matching=no_matching,
-                force_obs_time=force_obs_time
+                force_obs_time=force_obs_time,
+                parallel=parallel,
             )
             print()
         
@@ -108,14 +116,19 @@ class WorkflowModelObs(workflow.Workflow):
         print("Done!")
 
 
-    def process_files(self, trim_obs: bool = False, no_matching: bool = False, 
-                     force_obs_time: bool = False) -> int:
+    def process_files(self, trim_obs: bool = False, no_matching: bool = False,
+                     force_obs_time: bool = False, parallel: bool = False) -> int:
         """Process model and observation files.
         
         Args:
             trim_obs: Whether to trim obs_seq.in files to model grid boundaries
             no_matching: Whether to skip time-matching and assume 1:1 correspondence
             force_obs_time: Whether to assign observations reference time to model files
+            parallel: Whether to process model files in parallel.  When ``True``,
+                one :class:`~concurrent.futures.ThreadPoolExecutor` worker is
+                dispatched per model output file.  The number of threads is
+                chosen automatically by Python (``min(32, os.cpu_count() + 4)``).
+                Defaults to ``False``.
         """
 
         # Check that perfect_model_obs_dir is set
@@ -150,21 +163,74 @@ class WorkflowModelObs(workflow.Workflow):
             print("  Getting model boundaries...")
             hull_polygon, hull_points = model_tools.get_model_boundaries(self.config['ocean_geometry'])
 
-        # Process files
-        if no_matching:
-            for counter, (model_in_file, obs_in_file) in enumerate(zip(model_in_files, obs_in_files)):
-                self._process_model_obs_pair(
-                    model_in_file, obs_in_file, trim_obs, counter,
-                    hull_polygon, hull_points, force_obs_time
-                )
-        else:
-            counter = self._process_with_time_matching(
-                model_in_files, obs_in_files, trim_obs,
-                hull_polygon, hull_points, force_obs_time
-            )
+        # Validate that model files have non-overlapping timestamps (cheap metadata read)
+        self._validate_model_file_timestamps(model_in_files)
 
-        # Cleanup
-        self._namelist.cleanup_namelist_symlink()
+        try:
+            # Process files
+            if no_matching:
+                if parallel:
+                    # Pre-read model times in main thread to avoid xarray thread-safety issues.
+                    # xarray's CachingFileManager is not safe for concurrent access.
+                    precomputed_times: Dict[str, Optional[Tuple[int, int]]] = {}
+                    if not force_obs_time:
+                        for model_in_f in model_in_files:
+                            precomputed_times[model_in_f] = file_utils.get_model_time_in_days_seconds(
+                                model_in_f, self.model_adapter.time_varname
+                            )
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=None) as executor:
+                        futures = [
+                            executor.submit(
+                                self._process_model_obs_pair,
+                                model_in_file, obs_in_file, trim_obs, counter,
+                                hull_polygon, hull_points, force_obs_time,
+                                precomputed_times.get(model_in_file),
+                            )
+                            for counter, (model_in_file, obs_in_file)
+                            in enumerate(zip(model_in_files, obs_in_files))
+                        ]
+                        for future in concurrent.futures.as_completed(futures):
+                            future.result()  # re-raise any worker exception
+                else:
+                    for counter, (model_in_file, obs_in_file) in enumerate(zip(model_in_files, obs_in_files)):
+                        self._process_model_obs_pair(
+                            model_in_file, obs_in_file, trim_obs, counter,
+                            hull_polygon, hull_points, force_obs_time,
+                        )
+            else:
+                if parallel:
+                    # Serial pre-scan: assign base counters so sorted output filenames
+                    # reproduce the input file order regardless of completion order.
+                    cumulative_total = 0
+                    base_counters: Dict[str, int] = {}
+                    for model_in_f in model_in_files:
+                        with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
+                            n_snapshots = ds.sizes['time']
+                        base_counters[model_in_f] = cumulative_total
+                        cumulative_total += n_snapshots
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=None) as executor:
+                        futures = [
+                            executor.submit(
+                                self._process_model_file_worker,
+                                model_in_f, obs_in_files, base_counters[model_in_f],
+                                trim_obs, hull_polygon, hull_points, force_obs_time,
+                            )
+                            for model_in_f in model_in_files
+                        ]
+                        for future in concurrent.futures.as_completed(futures):
+                            future.result()  # re-raise any worker exception
+                else:
+                    self._process_with_time_matching(
+                        model_in_files, obs_in_files, trim_obs,
+                        hull_polygon, hull_points, force_obs_time,
+                    )
+        finally:
+            # In the parallel path the symlink lives in each worker's tmpdir
+            # (already removed), so this is a harmless no-op.
+            self._namelist.cleanup_namelist_symlink()
+
 
     def merge_model_obs_to_parquet(self, trim_obs: bool) -> None:
         """Merge model and observation files to parquet format."""
@@ -264,6 +330,136 @@ class WorkflowModelObs(workflow.Workflow):
                 print(f"Warning: Could not process observation types: {e}")
                 print("Continuing with existing obs_kind_nml configuration")
 
+        # Snapshot of the fully configured base content shared across worker threads.
+        # Workers copy from this string rather than re-applying all common parameters.
+        self._base_nml_content: str = self._namelist.content
+
+    def _validate_model_file_timestamps(self, model_in_files: List[str]) -> None:
+        """Raise ValueError if any timestamp appears in more than one model file.
+
+        Opens every model file via the model adapter (metadata-only read) and
+        collects all ``time`` coordinate values.  This enforces the assumption
+        that model files cover non-overlapping time ranges, which is required
+        for correct obs-file assignment in both serial and parallel execution.
+
+        Args:
+            model_in_files: Sorted list of model NetCDF file paths.
+
+        Raises:
+            ValueError: If a duplicate timestamp is found across the file set.
+        """
+        seen: Dict[Any, str] = {}  # timestamp -> first file that contained it
+        for model_in_f in model_in_files:
+            with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
+                for t in ds["time"].values:
+                    if t in seen:
+                        raise ValueError(
+                            f"Duplicate timestamp {t} found in both "
+                            f"'{seen[t]}' and '{model_in_f}'. "
+                            "Model input files must have unique timestamps."
+                        )
+                    seen[t] = model_in_f
+
+    def _process_model_file_worker(
+        self,
+        model_in_f: str,
+        obs_in_files: List[str],
+        base_counter: int,
+        trim_obs: bool,
+        hull_polygon: Optional[Any],
+        hull_points: Optional[np.ndarray],
+        force_obs_time: bool,
+    ) -> int:
+        """Process all matched pairs for a single model output file.
+
+        Mirrors the inner loop of :meth:`_process_with_time_matching` for one
+        model file.  Each matched pair is processed via
+        :meth:`_process_model_obs_pair` with a counter of
+        ``base_counter + local_match_index``, ensuring globally sorted output
+        filenames regardless of the order in which worker threads finish.
+
+        This method is thread-safe: *obs_in_files* is treated as read-only and
+        each invocation maintains its own ``used_obs_in_files`` list.
+
+        Args:
+            model_in_f: Path to the model output file handled by this worker.
+            obs_in_files: Full list of observation input files (read-only).
+            base_counter: Starting counter value for pairs found in this file.
+            trim_obs: Whether to trim observations to model grid boundaries.
+            hull_polygon: Model grid boundary polygon (used when *trim_obs*).
+            hull_points: Model grid boundary points array (used when *trim_obs*).
+            force_obs_time: Whether to use obs time instead of model time.
+
+        Returns:
+            Number of model-obs pairs processed for this model file.
+        """
+        local_match_index = 0
+        used_obs_in_files: List[str] = []
+
+        print(f"    Processing model file {model_in_f}...")
+
+        with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
+            time_var = "time"  # open_dataset_ctx() renames model time varname to 'time'
+            snapshots_nb = ds.sizes[time_var]
+            print(f"      model has {snapshots_nb} snapshots.")
+
+            for t_id, time in enumerate(ds[time_var].values):
+                print(f"      processing snapshot {t_id+1} of {snapshots_nb}...")
+                for obs_in_file in obs_in_files:
+                    if obs_in_file in used_obs_in_files:
+                        continue
+
+                    print(f"        checking obs_seq file {obs_in_file}")
+                    obs_in_df = obsq.ObsSequence(obs_in_file)
+                    t1 = obs_in_df.df.time.min()
+                    t2 = obs_in_df.df.time.max()
+                    print(f"        obs_seq min time: {t1}")
+                    print(f"        obs_seq max time: {t2}")
+                    print(f"        snapshot time: {pd.Timestamp(time)}")
+
+                    tw = timedelta(
+                        days=self.config["time_window"]["days"],
+                        seconds=self.config["time_window"]["seconds"],
+                    )
+                    half_tw = tw / 2
+                    ts = pd.Timestamp(time)
+                    ts1 = ts - half_tw
+                    ts2 = ts + half_tw
+                    print(
+                        f"        Validating obs_seq if obs are with in window {tw} "
+                        f"centered on {ts}, i.e. between {ts1} and {ts2}."
+                    )
+
+                    if (ts1 <= t1 <= ts2) and (ts1 <= t2 <= ts2):
+                        used_obs_in_files.append(obs_in_file)
+                        counter = base_counter + local_match_index
+                        tmp_model_in_file = os.path.basename(model_in_f) + "_tmp_" + str(t_id)
+                        tmp_model_in_file = os.path.join(self.config['tmp_folder'], tmp_model_in_file)
+
+                        if snapshots_nb > 1:
+                            model_time_varname = self.model_adapter.time_varname
+                            ncks = [
+                                "ncks", "-d", f"{model_time_varname},{t_id}",
+                                model_in_f, tmp_model_in_file,
+                            ]
+                            print(f"        Calling {' '.join(ncks)}")
+                            subprocess.run(ncks, check=True)
+                        else:
+                            tmp_model_in_file = model_in_f
+
+                        self._process_model_obs_pair(
+                            tmp_model_in_file, obs_in_file, trim_obs, counter,
+                            hull_polygon, hull_points, force_obs_time,
+                        )
+
+                        if snapshots_nb > 1:
+                            os.remove(tmp_model_in_file)
+
+                        local_match_index += 1
+                        break
+
+        return local_match_index
+
     def _process_with_time_matching(self, model_in_files: List[str], obs_in_files: List[str],
                                   trim_obs: bool, hull_polygon: Optional[Any], 
                                   hull_points: Optional[np.ndarray],
@@ -339,12 +535,35 @@ class WorkflowModelObs(workflow.Workflow):
         
         return counter
     
-    def _process_model_obs_pair(self, model_in_file: str, obs_in_file: str, 
+    def _process_model_obs_pair(self, model_in_file: str, obs_in_file: str,
                                trim_obs: bool, counter: int, hull_polygon: Optional[Any],
-                               hull_points: Optional[np.ndarray], force_obs_time: bool) -> None:
+                               hull_points: Optional[np.ndarray], force_obs_time: bool,
+                               precomputed_model_time: Optional[Tuple[int, int]] = None) -> None:
+        """Process a single model-observation file pair.
 
-        """Process a single model-observation file pair."""
-        model_in_filename = os.path.basename(model_in_file)
+        This method is self-contained and thread-safe: it creates its own
+        temporary working directory and a local
+        :class:`~model2obs.utils.namelist.Namelist` instance from the
+        pre-configured base content, so it can be called from multiple threads
+        simultaneously without shared-state conflicts.
+
+        The per-pair log is written to
+        ``<output_folder>/perfect_model_obs_<NNNN>.log`` instead of a shared
+        ``perfect_model_obs.log`` in the current working directory.
+
+        Args:
+            model_in_file: Path to the (possibly sliced) model NetCDF file.
+            obs_in_file: Path to the obs_seq input file.
+            trim_obs: Whether to trim observations to model grid boundaries.
+            counter: Zero-based pair index used to generate unique filenames.
+            hull_polygon: Model grid boundary polygon (used when *trim_obs*).
+            hull_points: Model grid boundary points array (used when *trim_obs*).
+            force_obs_time: Whether to use obs time instead of model time.
+            precomputed_model_time: Optional pre-read ``(days, seconds)`` tuple
+                from the model file.  When provided, the xarray read inside this
+                method is skipped, which avoids thread-safety issues with
+                xarray's ``CachingFileManager`` during parallel execution.
+        """
         obs_in_filename = os.path.basename(obs_in_file)
         file_number = f"{counter:04d}"
 
@@ -352,7 +571,7 @@ class WorkflowModelObs(workflow.Workflow):
         if trim_obs:
             print(f"        Trimming obs_seq file {obs_in_filename} to model grid boundaries...")
             trimmed_obs_file = os.path.join(
-                self.config['trimmed_obs_folder'], 
+                self.config['trimmed_obs_folder'],
                 f"trimmed_obs_seq_{file_number}.in"
             )
             obs_seq_tools.trim_obs_seq_in(obs_in_file, hull_polygon, hull_points, trimmed_obs_file)
@@ -370,80 +589,93 @@ class WorkflowModelObs(workflow.Workflow):
         print(f"          Perfect output file: {perfect_output_filename}")
         print(f"          Obs output file: {obs_output_filename}")
 
-        # Update namelist parameters
-        self._namelist.update_namelist_param(
-            "perfect_model_obs_nml", "input_state_files", model_in_file
-        )
-        self._namelist.update_namelist_param(
-            "perfect_model_obs_nml", "output_state_files", perfect_output_path
-        )
-        self._namelist.update_namelist_param(
-            "perfect_model_obs_nml", "obs_seq_in_file_name", obs_in_file_nml
-        )
-        self._namelist.update_namelist_param(
-            "perfect_model_obs_nml", "obs_seq_out_file_name", obs_output_path
-        )
-
-        if not force_obs_time:
-            # Assign time to model file
-            print("          Retrieving model time from model input file and updating namelist...")
-            model_time_days, model_time_seconds = file_utils.get_model_time_in_days_seconds(model_in_file,self.model_adapter.time_varname)
-            self._namelist.update_namelist_param(
-                "perfect_model_obs_nml", "init_time_days", model_time_days,
-                string=False
-            )
-            self._namelist.update_namelist_param(
-                "perfect_model_obs_nml", "init_time_seconds", model_time_seconds,
-                string=False
-            )
-        else:
-            # Assign time to model file
-            print("          Retrieving obs time from obs_seq and updating namelist...")
-            obs_time_days, obs_time_seconds = file_utils.get_obs_time_in_days_seconds(obs_in_file)
-            self._namelist.update_namelist_param(
-                "perfect_model_obs_nml", "init_time_days", obs_time_days,
-                string=False
-            )
-            self._namelist.update_namelist_param(
-                "perfect_model_obs_nml", "init_time_seconds", obs_time_seconds,
-                string=False
+        worker_tmpdir = tempfile.mkdtemp(dir=self.config['tmp_folder'])
+        try:
+            # Create a thread-local namelist from the pre-configured base content
+            local_nml = namelist.Namelist.from_content(
+                self._base_nml_content, working_dir=worker_tmpdir
             )
 
-        # Write updated namelist
-        input_nml_bck_path = os.path.join(
-            self.config['input_nml_bck'], 
-            f"input.nml_{file_number}.backup"
-        )
-        self._namelist.write_namelist(input_nml_bck_path)
-        self._namelist.symlink_to_namelist(input_nml_bck_path)
-        print(f"          {input_nml_bck_path} created.")
-        print()
-
-        # Call perfect_model_obs
-        print("          Calling perfect_model_obs...")
-        perfect_model_obs = os.path.join(self.config['perfect_model_obs_dir'], "perfect_model_obs")
-        perfect_model_obs_log_file = "perfect_model_obs.log"
-        with open(perfect_model_obs_log_file, "a") as logfile: # redirect pmo output to logfile
-            process = subprocess.Popen(
-                [perfect_model_obs],
-                cwd=os.getcwd(),
-                stdout=logfile,
-                stderr=subprocess.STDOUT,  # Combine stderr with stdout
-                text=True
+            # Apply pair-specific namelist parameters
+            local_nml.update_namelist_param(
+                "perfect_model_obs_nml", "input_state_files", model_in_file
             )
-            process.wait()
+            local_nml.update_namelist_param(
+                "perfect_model_obs_nml", "output_state_files", perfect_output_path
+            )
+            local_nml.update_namelist_param(
+                "perfect_model_obs_nml", "obs_seq_in_file_name", obs_in_file_nml
+            )
+            local_nml.update_namelist_param(
+                "perfect_model_obs_nml", "obs_seq_out_file_name", obs_output_path
+            )
 
-        # Wait for the process to finish
-        process.wait()
+            if not force_obs_time:
+                if precomputed_model_time is not None:
+                    model_time_days, model_time_seconds = precomputed_model_time
+                else:
+                    print("          Retrieving model time from model input file and updating namelist...")
+                    model_time_days, model_time_seconds = file_utils.get_model_time_in_days_seconds(
+                        model_in_file, self.model_adapter.time_varname
+                    )
+                local_nml.update_namelist_param(
+                    "perfect_model_obs_nml", "init_time_days", model_time_days, string=False
+                )
+                local_nml.update_namelist_param(
+                    "perfect_model_obs_nml", "init_time_seconds", model_time_seconds, string=False
+                )
+            else:
+                print("          Retrieving obs time from obs_seq and updating namelist...")
+                obs_time_days, obs_time_seconds = file_utils.get_obs_time_in_days_seconds(obs_in_file)
+                local_nml.update_namelist_param(
+                    "perfect_model_obs_nml", "init_time_days", obs_time_days, string=False
+                )
+                local_nml.update_namelist_param(
+                    "perfect_model_obs_nml", "init_time_seconds", obs_time_seconds, string=False
+                )
 
-        # Check the return code for errors
-        if process.returncode != 0:
-            raise RuntimeError(f"Error: {process.stderr.read()}")
+            # Write the pair-specific namelist to the persistent backup folder
+            input_nml_bck_path = os.path.join(
+                self.config['input_nml_bck'],
+                f"input.nml_{file_number}.backup"
+            )
+            local_nml.write_namelist(input_nml_bck_path)
+            # Symlink lives inside worker_tmpdir so the subprocess finds it
+            local_nml.symlink_to_namelist(input_nml_bck_path)
+            print(f"          {input_nml_bck_path} created.")
+            print()
 
-        print(f"          Perfect model output saved to: {perfect_output_path}")
-        print(f"          obs_seq.out output saved to: {obs_output_path}")
-        print(f"          perfect_model_obs log saved to: {perfect_model_obs_log_file}")
-    
+            # Call perfect_model_obs from the isolated worker directory
+            print("          Calling perfect_model_obs...")
+            perfect_model_obs_exe = os.path.join(
+                self.config['perfect_model_obs_dir'], "perfect_model_obs"
+            )
+            log_file_path = os.path.join(
+                self.config['output_folder'], f"perfect_model_obs_{file_number}.log"
+            )
+            with open(log_file_path, "w") as logfile:
+                process = subprocess.Popen(
+                    [perfect_model_obs_exe],
+                    cwd=worker_tmpdir,
+                    stdout=logfile,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                process.wait()
+
+            if process.returncode != 0:
+                raise RuntimeError(
+                    f"perfect_model_obs failed for file #{counter + 1} "
+                    f"(exit code {process.returncode}). "
+                    f"See log: {log_file_path}"
+                )
+
+            print(f"          Perfect model output saved to: {perfect_output_path}")
+            print(f"          obs_seq.out output saved to: {obs_output_path}")
+            print(f"          perfect_model_obs log saved to: {log_file_path}")
+        finally:
+            shutil.rmtree(worker_tmpdir, ignore_errors=True)
+
     def _merge_pair_to_parquet(self, perf_obs_file: str, orig_obs_file: str, 
                               parquet_path: str) -> None:
         """Merge a pair of observation files into parquet format."""

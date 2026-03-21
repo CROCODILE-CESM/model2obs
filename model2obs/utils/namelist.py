@@ -4,7 +4,7 @@ import os
 import re
 import shutil
 import tempfile
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 class Namelist():
     """Class to handle file operations related to perfect_model_obs input.nml
@@ -17,22 +17,53 @@ class Namelist():
     multi-line block parameters (from dict or list inputs).
     """
 
-    def __init__(self, namelist_path: str) -> None:
+    def __init__(self, namelist_path: str, working_dir: Optional[str] = None) -> None:
         """Initialize Namelist with path to namelist file.
 
         Arguments:
         namelist_path: Path to the namelist file
+        working_dir: Directory where the backup file and the ``input.nml``
+            symlink will be placed.  Defaults to the current working directory
+            when ``None``.  Provide a per-worker temporary directory to keep
+            concurrent instances isolated from each other.
         """
 
+        self._working_dir = working_dir if working_dir is not None else os.getcwd()
         print("    Setting up symlink for input.nml...")
         self.namelist_path = namelist_path
-        self.symlink_dest = os.path.join(os.getcwd(), "input.nml")
+        self.symlink_dest = os.path.join(self._working_dir, "input.nml")
 
         # Create backup and read namelist
-        shutil.copy2(self.namelist_path, "input.nml.backup")
-        print("    Created backup: input.nml.backup")
+        backup_path = os.path.join(self._working_dir, "input.nml.backup")
+        shutil.copy2(self.namelist_path, backup_path)
+        print(f"    Created backup: {backup_path}")
 
         self.content = self.read_namelist()
+
+    @classmethod
+    def from_content(cls, content: str, working_dir: str) -> 'Namelist':
+        """Create a Namelist instance from a pre-built content string.
+
+        Writes *content* to a temporary file inside *working_dir* and
+        initialises a new :class:`Namelist` from it.  This lets worker threads
+        start from an already-configured base state without re-reading the
+        template or re-applying all common parameters.
+
+        Arguments:
+        content: Namelist file content string (typically the output of a fully
+            configured base :attr:`Namelist.content`).
+        working_dir: Directory where the staging file and the ``input.nml``
+            backup/symlink will be written.  Should be a dedicated per-worker
+            temporary directory so concurrent callers do not interfere.
+
+        Returns:
+        New :class:`Namelist` instance whose :attr:`content` equals *content*
+        and whose :attr:`_working_dir` is *working_dir*.
+        """
+        base_nml_path = os.path.join(working_dir, "_base_input.nml")
+        with open(base_nml_path, 'w') as f:
+            f.write(content)
+        return cls(base_nml_path, working_dir=working_dir)
 
     def read_namelist(self) -> str:
         """Read namelist file and return as string."""
