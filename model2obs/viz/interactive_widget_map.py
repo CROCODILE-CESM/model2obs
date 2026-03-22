@@ -97,6 +97,11 @@ class InteractiveWidgetMap(InteractiveWidget):
         
         # Select available observation types
         type_options = self._compute_if_needed(self.df["type"].drop_duplicates()).sort_values().tolist()
+        if not type_options:
+            raise ValueError(
+                "The dataframe 'type' column is empty or contains only NaN values. "
+                "Ensure the input dataframe has at least one valid observation type."
+            )
         self.type_dropdown = widgets.Dropdown(
             options=type_options,
             value="FLOAT_TEMPERATURE" if "FLOAT_TEMPERATURE" in type_options else type_options[0],
@@ -108,6 +113,11 @@ class InteractiveWidgetMap(InteractiveWidget):
         # Select plotted variable
         refvar_options = [val for val in self.df.columns.to_list() 
                          if val not in self.config.disallowed_plotvars]
+        if not refvar_options:
+            raise ValueError(
+                "No valid plot variables found in the dataframe. "
+                "All columns are listed in 'disallowed_plotvars' or the dataframe has no columns."
+            )
         self.refvar_dropdown = widgets.Dropdown(
             options=refvar_options,
             value="difference" if "difference" in refvar_options else refvar_options[0],
