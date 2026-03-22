@@ -59,6 +59,7 @@ class ModelAdapterMOM6(ModelAdapter):
             'template_file',
             'static_file',
             'ocean_geometry',
+            'use_pseudo_depth',
             'model_state_variables',
             'layer_name'
         ]

@@ -174,7 +174,8 @@ class Namelist():
             - Dict for multi-line blocks formatted as triplets (key, value, 'UPDATE') or pairs
             - List for multi-line blocks formatted as simple values
         string: Whether scalar values should be quoted (True) or not (False)
-                (default: True). Ignored for dict/list values.
+                (default: True). Ignored for dict/list values and for Python
+                bool values, which are always written as Fortran `.true.`/`.false.`.
         dict_format: Format for dict values when value is a Dict:
             - 'triplet' (default): 3-field ``'key ', 'value', 'UPDATE'``
               (e.g. MOM6 ``model_state_variables``)
@@ -205,6 +206,11 @@ class Namelist():
 
         # Detect if this is a multi-line block parameter
         is_block_param = isinstance(value, (dict, list))
+
+        # Convert Python booleans to Fortran logical literals before formatting
+        if isinstance(value, bool):
+            value = '.true.' if value else '.false.'
+            string = False
         
         section_pattern = f'&{section}'
         lines = self.content.split('\n')

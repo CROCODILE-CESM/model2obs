@@ -524,6 +524,50 @@ class TestUpdateNamelistParam:
             assert "param1" in nml.content
         finally:
             os.chdir(original_cwd)
+
+    def test_update_param_bool_true(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param writes Python True as Fortran .true.
+
+        Given: A namelist parameter
+        When: update_namelist_param() is called with Python True
+        Then: Parameter is written as '.true.' (not 'True' or '1')
+        """
+        content = """&test_nml
+   use_pseudo_depth            = .false.,
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            nml = Namelist(str(nml_file))
+            nml.update_namelist_param("test_nml", "use_pseudo_depth", True)
+            assert "= .true.," in nml.content
+            assert "True" not in nml.content
+        finally:
+            os.chdir(original_cwd)
+
+    def test_update_param_bool_false(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param writes Python False as Fortran .false.
+
+        Given: A namelist parameter
+        When: update_namelist_param() is called with Python False
+        Then: Parameter is written as '.false.' (not 'False' or '0')
+        """
+        content = """&test_nml
+   use_pseudo_depth            = .true.,
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            nml = Namelist(str(nml_file))
+            nml.update_namelist_param("test_nml", "use_pseudo_depth", False)
+            assert "= .false.," in nml.content
+            assert "False" not in nml.content
+        finally:
+            os.chdir(original_cwd)
     
     def test_update_param_dict_triplet(self, create_test_namelist, tmp_path: Path):
         """Test update_namelist_param updates dict as 3-field triplet block (MOM6 format).
