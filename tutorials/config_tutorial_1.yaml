@@ -9,6 +9,10 @@
 # NOTE: Paths below are pre-configured for NCAR HPC systems (Casper/Derecho).
 # If running elsewhere, you will need to adjust these paths to your local setup.
 
+# Ocean model to use (required)
+# Supported values: MOM6, ROMS_Rutgers
+ocean_model: MOM6
+
 ####### INPUT FILES #######
 # Directory containing model .nc files to process
 model_files_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6/
@@ -54,5 +58,10 @@ time_window:
 model_state_variables:
   so: QTY_SALINITY
   thetao: QTY_POTENTIAL_TEMPERATURE
+
+# Use pseudo-depth for vertical interpolation (required when layer thickness 'h'
+# is not included in model_state_variables; set to false only if you explicitly
+# add 'h: QTY_LAYER_THICKNESS' to model_state_variables above)
+use_pseudo_depth: true
 
 layer_name: zl

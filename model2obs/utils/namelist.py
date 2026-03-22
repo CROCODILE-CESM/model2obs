@@ -131,8 +131,13 @@ class Namelist():
         Arguments:
         param: Parameter name
         value: Dictionary or list to format as multi-line block
-        dict_format: Format for dict values - 'triplet' adds 'UPDATE' as third element,
-                    'pair' uses just key-value pairs
+        dict_format: Format for dict values:
+            - 'triplet': 3-field format ``'key ', 'value', 'UPDATE'`` (e.g. MOM6
+              ``model_state_variables``)
+            - 'quintuplet': 5-field format ``'key ', 'value', 'NA', 'NA', 'UPDATE'``
+              where the middle two fields are min/max clamp placeholders
+              (e.g. ROMS ``variables``)
+            - 'pair': plain key-value pairs ``'key', 'value'``
         
         Returns:
         List of formatted lines for the block
@@ -145,8 +150,12 @@ class Namelist():
                 # First line with parameter name  
                 key, val = items[0]
                 if dict_format == 'triplet':
-                    # Format as triplets: 'key', 'value', 'UPDATE'
-                    padded_val = f"{val}".ljust(25)  # Match the padding from original
+                    # 3-field format: 'key ', 'value', 'UPDATE'
+                    padded_val = f"{val}".ljust(25)
+                    first_line = f"   {param.ljust(27)}= '{key} ', '{padded_val}', 'UPDATE',"
+                elif dict_format == 'quintuplet':
+                    # 5-field format: 'key ', 'value', 'NA', 'NA', 'UPDATE'
+                    padded_val = f"{val}".ljust(25)
                     first_line = f"   {param.ljust(27)}= '{key} ', '{padded_val}', 'NA', 'NA', 'UPDATE',"
                 else:
                     # Format as key-value pairs: 'key', 'value'
@@ -158,6 +167,9 @@ class Namelist():
                 indent = " " * (3 + 27 + 2)  # 3 + param_width + len("= ")
                 for key, val in items[1:]:
                     if dict_format == 'triplet':
+                        padded_val = f"{val}".ljust(25)
+                        line = f"{indent}'{key} ', '{padded_val}', 'UPDATE',"
+                    elif dict_format == 'quintuplet':
                         padded_val = f"{val}".ljust(25)
                         line = f"{indent}'{key} ', '{padded_val}', 'NA', 'NA', 'UPDATE',"
                     else:
@@ -193,19 +205,28 @@ class Namelist():
             - Dict for multi-line blocks formatted as triplets (key, value, 'UPDATE') or pairs
             - List for multi-line blocks formatted as simple values
         string: Whether scalar values should be quoted (True) or not (False)
-                (default: True). Ignored for dict/list values.
-        dict_format: Format for dict values - 'triplet' (default) adds 'UPDATE' as third element,
-                    'pair' uses just key-value pairs
+                (default: True). Ignored for dict/list values and for Python
+                bool values, which are always written as Fortran `.true.`/`.false.`.
+        dict_format: Format for dict values when value is a Dict:
+            - 'triplet' (default): 3-field ``'key ', 'value', 'UPDATE'``
+              (e.g. MOM6 ``model_state_variables``)
+            - 'quintuplet': 5-field ``'key ', 'value', 'NA', 'NA', 'UPDATE'``
+              (e.g. ROMS ``variables``, where NA placeholders are clamp min/max)
+            - 'pair': plain ``'key', 'value'`` pairs
         
         Examples:
         # Single-line parameter
         update_namelist_param('model_nml', 'assimilation_period_days', 5, string=False)
         
-        # Multi-line block from dict (formatted as triplets) - for model_state_variables
+        # MOM6 model_state_variables (3-field triplet, no NA clamp values)
         update_namelist_param('model_nml', 'model_state_variables', 
                              {'so': 'QTY_SALINITY', 'thetao': 'QTY_POTENTIAL_TEMPERATURE'})
         
-        # Multi-line block from dict (formatted as pairs) - for other dict parameters
+        # ROMS variables (5-field quintuplet, with NA clamp placeholders)
+        update_namelist_param('model_nml', 'variables',
+                             {'salt': 'QTY_SALINITY'}, dict_format='quintuplet')
+        
+        # Multi-line block from dict (formatted as pairs)
         update_namelist_param('some_nml', 'some_param', 
                              {'key1': 'val1', 'key2': 'val2'}, dict_format='pair')
         
@@ -216,6 +237,11 @@ class Namelist():
 
         # Detect if this is a multi-line block parameter
         is_block_param = isinstance(value, (dict, list))
+
+        # Convert Python booleans to Fortran logical literals before formatting
+        if isinstance(value, bool):
+            value = '.true.' if value else '.false.'
+            string = False
         
         section_pattern = f'&{section}'
         lines = self.content.split('\n')

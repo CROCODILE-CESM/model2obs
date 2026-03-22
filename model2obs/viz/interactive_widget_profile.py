@@ -93,6 +93,11 @@ class InteractiveWidgetProfile(InteractiveWidget):
 
         # X-axis dropdown
         axis_options = [col for col in self.df.columns.tolist() if col != 'time']
+        if not axis_options:
+            raise ValueError(
+                "No valid axis columns found in the dataframe. "
+                "The dataframe must have at least one column other than 'time'."
+            )
         self.x_dropdown = widgets.Dropdown(
             options=axis_options,
             value=self.x_column if self.x_column in axis_options else axis_options[0],
@@ -115,6 +120,11 @@ class InteractiveWidgetProfile(InteractiveWidget):
             type_options = self._compute_if_needed(
                 self.df["type"].drop_duplicates()
             ).sort_values().tolist()
+            if not type_options:
+                raise ValueError(
+                    "The dataframe 'type' column is empty or contains only NaN values. "
+                    "Ensure the input dataframe has at least one valid observation type."
+                )
             default_types = (["FLOAT_TEMPERATURE"] if "FLOAT_TEMPERATURE" in type_options
                              else [type_options[0]])
 
