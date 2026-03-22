@@ -546,6 +546,86 @@ class TestModelAdapterPathValidation:
         with pytest.raises(ValueError, match="not a .nc file"):
             model_adapter.validate_paths(config, run_opts)
 
+    def _make_valid_mom6_base_config(self, tmp_path) -> dict:
+        """Create a minimal valid MOM6 config with all required paths on disk."""
+        model_folder = tmp_path / "model_files"
+        model_folder.mkdir()
+        (model_folder / "model_01.nc").touch()
+
+        obs_folder = tmp_path / "obs"
+        obs_folder.mkdir()
+        (obs_folder / "obs_01.in").touch()
+
+        (tmp_path / "template.nc").touch()
+        (tmp_path / "static.nc").touch()
+        (tmp_path / "ocean_geometry.nc").touch()
+
+        return {
+            'model_files_folder': str(model_folder),
+            'obs_seq_in_folder': str(obs_folder),
+            'output_folder': str(tmp_path / "output"),
+            'tmp_folder': str(tmp_path / "tmp"),
+            'parquet_folder': str(tmp_path / "parquet"),
+            'template_file': str(tmp_path / "template.nc"),
+            'static_file': str(tmp_path / "static.nc"),
+            'ocean_geometry': str(tmp_path / "ocean_geometry.nc"),
+        }
+
+    def test_mom6_validate_paths_vertical_interp_pseudo_depth(self, tmp_path):
+        """Test MOM6 validate_paths passes when use_pseudo_depth is True.
+
+        Given: A valid MOM6 config with use_pseudo_depth set to True
+        When: validate_paths() is called
+        Then: Validation succeeds without error
+        """
+        model_adapter = create_model_adapter("mom6")
+        config = self._make_valid_mom6_base_config(tmp_path)
+        config['use_pseudo_depth'] = True
+        run_opts = RunOptions(trim_obs=False, no_matching=False, force_obs_time=False)
+
+        model_adapter.validate_paths(config, run_opts)  # should not raise
+
+    def test_mom6_validate_paths_vertical_interp_layer_thickness(self, tmp_path):
+        """Test MOM6 validate_paths passes when QTY_LAYER_THICKNESS is in state.
+
+        Given: A valid MOM6 config with h mapped to QTY_LAYER_THICKNESS
+              and use_pseudo_depth absent (or False)
+        When: validate_paths() is called
+        Then: Validation succeeds without error
+        """
+        model_adapter = create_model_adapter("mom6")
+        config = self._make_valid_mom6_base_config(tmp_path)
+        config['use_pseudo_depth'] = False
+        config['model_state_variables'] = {
+            'so': 'QTY_SALINITY',
+            'thetao': 'QTY_POTENTIAL_TEMPERATURE',
+            'h': 'QTY_LAYER_THICKNESS',
+        }
+        run_opts = RunOptions(trim_obs=False, no_matching=False, force_obs_time=False)
+
+        model_adapter.validate_paths(config, run_opts)  # should not raise
+
+    def test_mom6_validate_paths_vertical_interp_missing(self, tmp_path):
+        """Test MOM6 validate_paths raises ValueError when neither pseudo-depth
+        nor QTY_LAYER_THICKNESS is configured.
+
+        Given: A valid MOM6 config without use_pseudo_depth and without
+               QTY_LAYER_THICKNESS in model_state_variables
+        When: validate_paths() is called
+        Then: ValueError is raised pointing to DART error 1013
+        """
+        model_adapter = create_model_adapter("mom6")
+        config = self._make_valid_mom6_base_config(tmp_path)
+        config['use_pseudo_depth'] = False
+        config['model_state_variables'] = {
+            'so': 'QTY_SALINITY',
+            'thetao': 'QTY_POTENTIAL_TEMPERATURE',
+        }
+        run_opts = RunOptions(trim_obs=False, no_matching=False, force_obs_time=False)
+
+        with pytest.raises(ValueError, match="1013"):
+            model_adapter.validate_paths(config, run_opts)
+
     def test_roms_validate_paths_success(self, tmp_path):
         """Test ROMS validate_paths with all valid paths."""
         model_adapter = create_model_adapter("roms_rutgers")
