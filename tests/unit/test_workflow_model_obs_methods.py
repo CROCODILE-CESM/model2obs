@@ -534,7 +534,8 @@ class TestProcessModelObsPair:
     def test_process_model_obs_pair_tmpdir_cleaned_on_success(self, mock_get_time,
                                                               mock_from_content,
                                                               mock_popen, tmp_path):
-        """Test that the worker tmpdir is removed after successful execution."""
+        """Test that the worker tmpdir — including files written inside it — is removed
+        after successful execution."""
         config = self._make_config(tmp_path)
 
         mock_get_time.return_value = (100, 0)
@@ -542,13 +543,17 @@ class TestProcessModelObsPair:
         mock_process.wait.return_value = None
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
-        mock_from_content.return_value = Mock()
+
+        def from_content_side_effect(content, working_dir):
+            Path(working_dir, "input.nml").write_text(content)
+            return Mock()
+
+        mock_from_content.side_effect = from_content_side_effect
 
         workflow = WorkflowModelObs(config)
         workflow._base_nml_content = "&model_nml\n/"
 
         tmp_folder = tmp_path / 'tmp'
-        items_before = set(tmp_folder.iterdir())
 
         workflow._process_model_obs_pair(
             str(tmp_path / 'model.nc'),
@@ -558,8 +563,7 @@ class TestProcessModelObsPair:
             force_obs_time=False,
         )
 
-        items_after = set(tmp_folder.iterdir())
-        assert items_before == items_after, "Worker tmpdir was not cleaned up"
+        assert list(tmp_folder.iterdir()) == [], "Worker tmpdir was not cleaned up"
 
     @patch('subprocess.Popen')
     @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist.from_content')
@@ -567,7 +571,8 @@ class TestProcessModelObsPair:
     def test_process_model_obs_pair_tmpdir_cleaned_on_failure(self, mock_get_time,
                                                               mock_from_content,
                                                               mock_popen, tmp_path):
-        """Test that the worker tmpdir is removed even when subprocess fails."""
+        """Test that the worker tmpdir — including files written inside it — is removed
+        even when the subprocess fails."""
         config = self._make_config(tmp_path)
 
         mock_get_time.return_value = (100, 0)
@@ -575,13 +580,17 @@ class TestProcessModelObsPair:
         mock_process.wait.return_value = None
         mock_process.returncode = 1
         mock_popen.return_value = mock_process
-        mock_from_content.return_value = Mock()
+
+        def from_content_side_effect(content, working_dir):
+            Path(working_dir, "input.nml").write_text(content)
+            return Mock()
+
+        mock_from_content.side_effect = from_content_side_effect
 
         workflow = WorkflowModelObs(config)
         workflow._base_nml_content = "&model_nml\n/"
 
         tmp_folder = tmp_path / 'tmp'
-        items_before = set(tmp_folder.iterdir())
 
         with pytest.raises(RuntimeError):
             workflow._process_model_obs_pair(
@@ -592,15 +601,19 @@ class TestProcessModelObsPair:
                 force_obs_time=False,
             )
 
-        items_after = set(tmp_folder.iterdir())
-        assert items_before == items_after, "Worker tmpdir was not cleaned up on failure"
+        assert list(tmp_folder.iterdir()) == [], "Worker tmpdir was not cleaned up on failure"
 
     @patch('subprocess.Popen')
     @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist.from_content')
     @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
     def test_process_model_obs_pair_per_pair_log(self, mock_get_time, mock_from_content,
                                                  mock_popen, tmp_path):
-        """Test that each pair writes to its own numbered log file."""
+        """Test that each pair writes to its own numbered log file.
+
+        Calls _process_model_obs_pair directly to validate the filename format
+        (zero-padded counter) for a single pair.  The integration counterpart
+        verifies that all N log files are present after a full parallel run.
+        """
         config = self._make_config(tmp_path)
 
         mock_get_time.return_value = (100, 0)
@@ -934,7 +947,12 @@ class TestParallelDispatch:
         self, mock_validate_paths, mock_get_files, mock_get_time, mock_init_nml,
         mock_print, mock_validate_ts, mock_process_pair, tmp_path
     ):
-        """Test that exceptions raised in parallel workers propagate to main thread."""
+        """Test that any exception raised inside a worker re-raises in the main thread.
+
+        Uses a mocked _process_model_obs_pair so the test focuses solely on the
+        ThreadPoolExecutor dispatch mechanism, independent of what causes the failure.
+        The integration counterpart tests the specific subprocess-failure path.
+        """
         workflow, _ = self._base_workflow(tmp_path)
         workflow._namelist = Mock()
 

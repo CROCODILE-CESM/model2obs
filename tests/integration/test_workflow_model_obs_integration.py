@@ -444,10 +444,9 @@ class TestWorkflowModelObsParallelProcessing:
     @patch('subprocess.Popen')
     @patch('subprocess.run')
     def test_parallel_no_matching_same_call_count(
-        self, mock_run, mock_popen, workflow_config, mock_obs_seq_files, tmp_path
+        self, mock_run, mock_popen, workflow_config, mock_obs_seq_files
     ):
-        """Test parallel=True (no_matching) invokes perfect_model_obs the same number of
-        times as serial=False, and that the output filenames follow the expected pattern."""
+        """Parallel mode invokes perfect_model_obs the same number of times as serial."""
         from model2obs.workflows.workflow_model_obs import WorkflowModelObs
 
         mock_run.return_value = Mock(returncode=0)
@@ -456,18 +455,38 @@ class TestWorkflowModelObsParallelProcessing:
         mock_proc.wait.return_value = None
         mock_popen.return_value = mock_proc
 
-        workflow = WorkflowModelObs(workflow_config)
-        workflow.process_files(trim_obs=False, no_matching=True, parallel=True)
+        WorkflowModelObs(workflow_config).process_files(
+            trim_obs=False, no_matching=True, parallel=False
+        )
+        serial_count = mock_popen.call_count
 
-        # Three model files -> three perfect_model_obs calls
-        assert mock_popen.call_count == 3
+        # Clear output folders between runs so path validation accepts fresh directories
+        for folder_key in ('output_folder', 'input_nml_bck'):
+            folder = Path(workflow_config[folder_key])
+            shutil.rmtree(folder)
+            folder.mkdir()
+
+        mock_popen.reset_mock()
+
+        WorkflowModelObs(workflow_config).process_files(
+            trim_obs=False, no_matching=True, parallel=True
+        )
+        parallel_count = mock_popen.call_count
+
+        assert parallel_count == serial_count
 
     @patch('subprocess.Popen')
     @patch('subprocess.run')
     def test_parallel_no_matching_worker_exception_propagates(
         self, mock_run, mock_popen, workflow_config, mock_obs_seq_files
     ):
-        """Test that a worker failure in parallel mode raises in the main thread."""
+        """A subprocess failure inside a parallel worker raises RuntimeError at the call site.
+
+        Exercises the full stack: Popen returncode=1 → RuntimeError in
+        _process_model_obs_pair → re-raised through ThreadPoolExecutor.
+        The unit counterpart tests the dispatch mechanism in isolation with a
+        mocked _process_model_obs_pair.
+        """
         from model2obs.workflows.workflow_model_obs import WorkflowModelObs
 
         mock_run.return_value = Mock(returncode=0)
@@ -484,9 +503,13 @@ class TestWorkflowModelObsParallelProcessing:
     @patch('subprocess.Popen')
     @patch('subprocess.run')
     def test_parallel_per_pair_log_files_created(
-        self, mock_run, mock_popen, workflow_config, mock_obs_seq_files, tmp_path
+        self, mock_run, mock_popen, workflow_config, mock_obs_seq_files
     ):
-        """Test that per-pair log files are created in the output folder."""
+        """All N log files are present in the output folder after a parallel run.
+
+        Verifies that concurrent workers do not lose or overwrite each other's
+        log files.  The unit counterpart tests the filename format for a single pair.
+        """
         from model2obs.workflows.workflow_model_obs import WorkflowModelObs
 
         mock_run.return_value = Mock(returncode=0)
