@@ -526,11 +526,11 @@ class TestUpdateNamelistParam:
             os.chdir(original_cwd)
     
     def test_update_param_dict_triplet(self, create_test_namelist, tmp_path: Path):
-        """Test update_namelist_param updates dict as triplet block.
+        """Test update_namelist_param updates dict as 3-field triplet block (MOM6 format).
         
         Given: A namelist with a block parameter
-        When: update_namelist_param() is called with dict
-        Then: Multi-line triplet block is created
+        When: update_namelist_param() is called with dict and dict_format='triplet'
+        Then: Multi-line 3-field block is created without 'NA' clamp placeholders
         """
         content = """&test_nml
    param1                      = "value1",
@@ -553,6 +553,39 @@ class TestUpdateNamelistParam:
             assert "so" in nml.content
             assert "QTY_SALINITY" in nml.content
             assert "UPDATE" in nml.content
+            assert "'NA'" not in nml.content
+        finally:
+            os.chdir(original_cwd)
+
+    def test_update_param_dict_quintuplet(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param updates dict as 5-field quintuplet block (ROMS format).
+        
+        Given: A namelist with a block parameter
+        When: update_namelist_param() is called with dict and dict_format='quintuplet'
+        Then: Multi-line 5-field block is created with 'NA' clamp placeholders
+        """
+        content = """&test_nml
+   param1                      = "value1",
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+        
+        try:
+            nml = Namelist(str(nml_file))
+            
+            nml.update_namelist_param(
+                "test_nml",
+                "variables",
+                {"salt": "QTY_SALINITY", "temp": "QTY_TEMPERATURE"},
+                dict_format='quintuplet'
+            )
+            
+            assert "variables" in nml.content
+            assert "salt" in nml.content
+            assert "QTY_SALINITY" in nml.content
+            assert "UPDATE" in nml.content
+            assert "'NA'" in nml.content
         finally:
             os.chdir(original_cwd)
     

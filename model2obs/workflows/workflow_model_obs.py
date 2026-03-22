@@ -235,7 +235,13 @@ class WorkflowModelObs(workflow.Workflow):
                 self._namelist.update_namelist_param(
                     "model_nml", key, self.config[key],string=False
                 )
-            elif key=='variables':
+            elif key == 'variables':
+                # ROMS 5-field format: 'var', 'QTY', 'NA', 'NA', 'UPDATE'
+                self._namelist.update_namelist_param(
+                    "model_nml", key, self.config[key], dict_format='quintuplet'
+                )
+            elif key == 'model_state_variables':
+                # MOM6 3-field format: 'var', 'QTY', 'UPDATE' (no clamp placeholders)
                 self._namelist.update_namelist_param(
                     "model_nml", key, self.config[key], dict_format='triplet'
                 )
