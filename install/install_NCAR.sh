@@ -36,7 +36,7 @@ export CROCOLAKE_PATH="$CROCOLAKE_PATH"
 export TUTORIAL_DATA_PATH="$TUTORIAL_DATA_PATH"
 EOF
 
-echo "source \"${CONDA_SCRIPTS_PATH}envpaths_NCAR.sh\"" > $CONDA_ENV_PATH/etc/conda/activate.d/load_paths.sh
+echo "source \"${CONDA_SCRIPTS_PATH}envpaths.sh\"" > $CONDA_ENV_PATH/etc/conda/activate.d/load_paths.sh
 chmod +x $CONDA_ENV_PATH/etc/conda/activate.d/load_paths.sh
 
 if [[ "$TUTORIAL" -eq 1 ]]; then
