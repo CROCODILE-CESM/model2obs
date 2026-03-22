@@ -55,4 +55,9 @@ model_state_variables:
   so: QTY_SALINITY
   thetao: QTY_POTENTIAL_TEMPERATURE
 
+# Use pseudo-depth for vertical interpolation (required when layer thickness 'h'
+# is not included in model_state_variables; set to false only if you explicitly
+# add 'h: QTY_LAYER_THICKNESS' to model_state_variables above)
+use_pseudo_depth: true
+
 layer_name: zl

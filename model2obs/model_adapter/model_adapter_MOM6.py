@@ -59,6 +59,7 @@ class ModelAdapterMOM6(ModelAdapter):
             'template_file',
             'static_file',
             'ocean_geometry',
+            'use_pseudo_depth',
             'model_state_variables',
             'layer_name'
         ]
@@ -73,7 +74,24 @@ class ModelAdapterMOM6(ModelAdapter):
         config_utils.check_nc_file(config['template_file'], "template_file")
         config_utils.check_nc_file(config['static_file'], "static_file")
         config_utils.check_nc_file(config['ocean_geometry'], "ocean_geometry")
-        
+
+        # Ensure DART can perform vertical interpolation: either use_pseudo_depth
+        # must be True, or the layer thickness variable must be in the state.
+        # Only enforced when model_state_variables is explicitly configured.
+        print("  Validating MOM6 vertical interpolation settings...")
+        state_vars = config.get('model_state_variables')
+        if state_vars is not None:
+            use_pseudo_depth = config.get('use_pseudo_depth', False)
+            has_thickness = 'QTY_LAYER_THICKNESS' in state_vars.values()
+            if not use_pseudo_depth and not has_thickness:
+                raise ValueError(
+                    "MOM6 vertical interpolation is not configured. Either set "
+                    "'use_pseudo_depth: true' in the config, or add a variable "
+                    "mapped to 'QTY_LAYER_THICKNESS' in 'model_state_variables' "
+                    "(e.g. 'h: QTY_LAYER_THICKNESS'). Without one of these, DART "
+                    "will fail silently with error 1013 (THICKNESS_NOT_IN_STATE)."
+                )
+
         return
 
     @contextmanager

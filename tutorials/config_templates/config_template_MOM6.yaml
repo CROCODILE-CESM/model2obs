@@ -66,3 +66,20 @@ time_window:
   weeks: 0       # Additional weeks
   months: 0      # Additional months (30 days/month)
   years: 0       # Additional years (365 days/year)
+
+####### MOM6 CONFIGURATION #######
+# MOM6 state variables to include in DART interpolation.
+# Format: <model_variable_name>: <DART_quantity>
+# Add 'h: QTY_LAYER_THICKNESS' here and set use_pseudo_depth to false
+# if you want DART to use true layer-thickness-based vertical coordinates.
+model_state_variables:
+  so: QTY_SALINITY
+  thetao: QTY_POTENTIAL_TEMPERATURE
+
+# Use pseudo-depth for vertical interpolation (required when layer thickness 'h'
+# is not included in model_state_variables; set to false only if you explicitly
+# add 'h: QTY_LAYER_THICKNESS' to model_state_variables above)
+use_pseudo_depth: true
+
+# Name of the layer coordinate variable in MOM6 output files (typically 'zl')
+layer_name: zl

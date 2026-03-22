@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-## @file download_db.py
+## @file download_crocolake.py
 #
 #
 ## @author Enrico Milanese <enrico.milanese@whoi.edu>
