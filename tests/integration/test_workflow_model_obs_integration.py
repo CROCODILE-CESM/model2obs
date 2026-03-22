@@ -501,3 +501,47 @@ class TestWorkflowModelObsParallelProcessing:
         output_folder = Path(workflow_config['output_folder'])
         log_files = list(output_folder.glob("perfect_model_obs_*.log"))
         assert len(log_files) == 3, f"Expected 3 per-pair log files, found {len(log_files)}"
+
+    @patch('subprocess.Popen')
+    @patch('subprocess.run')
+    def test_no_matching_serial_parallel_same_pairs(
+        self, mock_run, mock_popen, workflow_config, mock_obs_seq_files
+    ):
+        """Serial and parallel dispatch the identical (model_file, obs_file, counter) triples.
+
+        The parallel path pre-assigns counters before spawning threads, so output
+        filenames must match the serial ordering regardless of thread completion order.
+        """
+        from model2obs.workflows.workflow_model_obs import WorkflowModelObs
+
+        mock_run.return_value = Mock(returncode=0)
+        mock_proc = Mock()
+        mock_proc.returncode = 0
+        mock_proc.wait.return_value = None
+        mock_popen.return_value = mock_proc
+
+        serial_pairs = []
+        parallel_pairs = []
+
+        def capture(call_list):
+            # patch.object omits self; positional order: model_in_file, obs_in_file,
+            # trim_obs, counter, hull_polygon, hull_points, force_obs_time[, precomputed]
+            def side_effect(*args, **kwargs):
+                call_list.append((args[0], args[1], args[3]))
+            return side_effect
+
+        with patch.object(WorkflowModelObs, '_process_model_obs_pair',
+                          side_effect=capture(serial_pairs)):
+            WorkflowModelObs(workflow_config).process_files(
+                trim_obs=False, no_matching=True, parallel=False
+            )
+
+        with patch.object(WorkflowModelObs, '_process_model_obs_pair',
+                          side_effect=capture(parallel_pairs)):
+            WorkflowModelObs(workflow_config).process_files(
+                trim_obs=False, no_matching=True, parallel=True
+            )
+
+        assert len(serial_pairs) == len(parallel_pairs)
+        assert sorted(serial_pairs) == sorted(parallel_pairs)
+
