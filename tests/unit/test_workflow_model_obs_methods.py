@@ -761,6 +761,88 @@ class TestProcessModelFileWorker:
         assert count == 0
         mock_process_pair.assert_not_called()
 
+    @patch.object(WorkflowModelObs, '_process_model_obs_pair')
+    def test_worker_shared_used_obs_list_prevents_rematch(self, mock_process_pair, tmp_path):
+        """Test that an already-matched obs file is skipped when used_obs_in_files is shared."""
+        import xarray as xr
+        config = self._make_config(tmp_path)
+
+        model_file = str(tmp_path / 'model.nc')
+        ds = xr.Dataset(coords={"time": pd.date_range("2020-01-01", periods=1)})
+        ds.to_netcdf(model_file)
+
+        obs_file = str(tmp_path / 'obs.in')
+
+        mock_obs = Mock()
+        ts = pd.Timestamp("2020-01-01")
+        mock_obs.df.time.min.return_value = ts - timedelta(hours=1)
+        mock_obs.df.time.max.return_value = ts + timedelta(hours=1)
+
+        workflow = WorkflowModelObs(config)
+        workflow._base_nml_content = "&model_nml\n/"
+
+        # Pre-populate the shared list with the obs file — simulates it being
+        # matched by a previous model file in _process_with_time_matching.
+        shared_used = [obs_file]
+
+        with patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence', return_value=mock_obs):
+            count = workflow._process_model_file_worker(
+                model_file, [obs_file], base_counter=0,
+                trim_obs=False, hull_polygon=None, hull_points=None,
+                force_obs_time=False,
+                used_obs_in_files=shared_used,
+            )
+
+        assert count == 0
+        mock_process_pair.assert_not_called()
+
+    @patch('subprocess.run')
+    @patch.object(WorkflowModelObs, '_process_model_obs_pair')
+    def test_worker_multi_snapshot_slices_with_ncks(
+        self, mock_process_pair, mock_run, tmp_path
+    ):
+        """Test that a model file with multiple snapshots triggers an ncks slice."""
+        import xarray as xr
+        config = self._make_config(tmp_path)
+
+        model_file = str(tmp_path / 'model.nc')
+        ds = xr.Dataset(coords={"time": pd.date_range("2020-01-01", periods=2)})
+        ds.to_netcdf(model_file)
+
+        obs_file = str(tmp_path / 'obs.in')
+
+        def ncks_side_effect(args, **kwargs):
+            # Simulate ncks: create the output slice file so os.remove succeeds
+            Path(args[-1]).touch()
+            return Mock(returncode=0)
+
+        mock_run.side_effect = ncks_side_effect
+
+        mock_obs = Mock()
+        ts = pd.Timestamp("2020-01-01")
+        mock_obs.df.time.min.return_value = ts - timedelta(hours=1)
+        mock_obs.df.time.max.return_value = ts + timedelta(hours=1)
+
+        workflow = WorkflowModelObs(config)
+        workflow._base_nml_content = "&model_nml\n/"
+
+        with patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence', return_value=mock_obs):
+            count = workflow._process_model_file_worker(
+                model_file, [obs_file], base_counter=0,
+                trim_obs=False, hull_polygon=None, hull_points=None,
+                force_obs_time=False,
+            )
+
+        assert count == 1
+        mock_process_pair.assert_called_once()
+        # ncks should have been called to slice out snapshot 0
+        ncks_call_args = mock_run.call_args[0][0]
+        assert ncks_call_args[0] == "ncks"
+        assert model_file in ncks_call_args
+        # Temp slice file must not be left behind after successful processing
+        tmp_files = list(Path(config['tmp_folder']).iterdir())
+        assert tmp_files == [], f"Temp files not cleaned up: {tmp_files}"
+
 
 class TestParallelDispatch:
     """Tests for parallel=True dispatch in process_files()."""
@@ -886,5 +968,33 @@ class TestParallelDispatch:
 
         mock_validate_ts.assert_called_once_with(model_files)
 
+    @patch.object(WorkflowModelObs, '_process_model_obs_pair')
+    @patch.object(WorkflowModelObs, '_validate_model_file_timestamps')
+    @patch.object(WorkflowModelObs, '_print_workflow_config')
+    @patch.object(WorkflowModelObs, '_initialize_model_namelist')
+    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_sorted_files')
+    @patch('model2obs.model_adapter.model_adapter_MOM6.ModelAdapterMOM6.validate_paths')
+    @patch('model2obs.workflows.workflow_model_obs.model_tools.get_model_boundaries',
+           return_value=('polygon', 'points'))
+    def test_trim_obs_calls_get_model_boundaries(
+        self, mock_boundaries, mock_validate_paths, mock_get_files, mock_init_nml,
+        mock_print, mock_validate_ts, mock_process_pair, tmp_path
+    ):
+        """Test that trim_obs=True calls get_model_boundaries before processing."""
+        workflow, _ = self._base_workflow(tmp_path)
+        workflow._namelist = Mock()
+
+        model_files = ['model1.nc']
+        obs_files = ['obs1.in']
+        mock_get_files.side_effect = [model_files, obs_files]
+
+        workflow.process_files(no_matching=True, trim_obs=True, parallel=False)
+
+        mock_boundaries.assert_called_once_with(workflow.config['ocean_geometry'])
+        call_args = mock_process_pair.call_args
+        assert call_args[0][4] == 'polygon'
+        assert call_args[0][5] == 'points'
+
 
 pytestmark = pytest.mark.unit
+
