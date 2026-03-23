@@ -404,7 +404,29 @@ class TestProcessModelObsPair:
     The method is self-contained: it creates its own temporary directory and a
     local Namelist instance via Namelist.from_content().  Tests mock
     Namelist.from_content and subprocess.Popen instead of self._namelist.
+
+    obsq.ObsSequence is mocked via the autouse fixture below because the
+    method now reads the obs_seq.in file before running DART and the obs_seq.out
+    file after DART to collect statistics for the pair summary log.
     """
+
+    @pytest.fixture(autouse=True)
+    def _mock_obs_sequence(self):
+        """Mock obsq.ObsSequence for all tests in this class.
+
+        Returns a minimal DataFrame with a time column and a QC column so that
+        the statistics-collection code in _process_model_obs_pair runs without
+        touching the filesystem.
+        """
+        mock_df = pd.DataFrame({
+            "time": [pd.Timestamp("2019-01-15T12:00:00")],
+            "DART_QC_0": [0],
+        })
+        mock_seq = Mock()
+        mock_seq.df = mock_df
+        with patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence',
+                   return_value=mock_seq):
+            yield mock_seq
 
     def _make_config(self, tmp_path):
         """Return a minimal config dict with all folders created."""
@@ -636,6 +658,145 @@ class TestProcessModelObsPair:
 
         log_path = tmp_path / 'output' / 'perfect_model_obs_0007.log'
         assert log_path.exists(), "Per-pair log file was not created"
+
+
+class TestWritePairSummaryLog:
+    """Tests for _write_pair_summary_log() method."""
+
+    def _make_workflow(self, tmp_path):
+        (tmp_path / "output").mkdir(exist_ok=True)
+        return WorkflowModelObs({
+            'ocean_model': 'MOM6',
+            'model_files_folder': str(tmp_path),
+            'obs_seq_in_folder': str(tmp_path),
+            'output_folder': str(tmp_path / 'output'),
+            'template_file': 'template.nc',
+            'static_file': 'static.nc',
+            'ocean_geometry': 'ocean.nc',
+            'perfect_model_obs_dir': str(tmp_path),
+            'parquet_folder': str(tmp_path),
+        })
+
+    def _common_kwargs(self, tmp_path):
+        return dict(
+            file_number="0003",
+            model_in_file=str(tmp_path / "model_tmp.nc"),
+            original_model_file=str(tmp_path / "model.nc"),
+            log_time_days=152685,
+            log_time_seconds=43200,
+            time_source="model file",
+            obs_in_file_nml=str(tmp_path / "trimmed.in"),
+            obs_in_file_orig=str(tmp_path / "obs.in"),
+            obs_min_time=pd.Timestamp("2019-01-15T00:00:00"),
+            obs_max_time=pd.Timestamp("2019-01-15T23:59:59"),
+            obs_submitted_count=150,
+            obs_original_count=200,
+            dart_exit_code=0,
+            obs_output_path=str(tmp_path / "output" / "obs_seq_0003.out"),
+            n_success=120,
+            n_fail=30,
+        )
+
+    def test_log_file_created(self, tmp_path):
+        """Log file is written to output_folder/pair_summary_NNNN.log."""
+        wf = self._make_workflow(tmp_path)
+        wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
+        assert (tmp_path / "output" / "pair_summary_0003.log").exists()
+
+    def test_log_contains_model_file(self, tmp_path):
+        """Log contains the submitted NC file path."""
+        wf = self._make_workflow(tmp_path)
+        wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "model_tmp.nc" in content
+
+    def test_log_contains_original_model_file_when_different(self, tmp_path):
+        """Log records the original NC file when it differs from the submitted one."""
+        wf = self._make_workflow(tmp_path)
+        wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "Original NC file" in content
+        assert "model.nc" in content
+
+    def test_log_omits_original_model_file_when_same(self, tmp_path):
+        """Log omits the original NC file line when it is the same as the submitted one."""
+        wf = self._make_workflow(tmp_path)
+        kwargs = self._common_kwargs(tmp_path)
+        kwargs["original_model_file"] = kwargs["model_in_file"]  # same file
+        wf._write_pair_summary_log(**kwargs)
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "Original NC file" not in content
+
+    def test_log_contains_time_used(self, tmp_path):
+        """Log contains a human-readable time and its source label."""
+        wf = self._make_workflow(tmp_path)
+        wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "Time used" in content
+        assert "(from model file)" in content
+
+    def test_log_contains_obs_counts(self, tmp_path):
+        """Log records both submitted count and original pre-trim count."""
+        wf = self._make_workflow(tmp_path)
+        wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "150" in content   # submitted
+        assert "200" in content   # original before trimming
+
+    def test_log_contains_interpolation_counts(self, tmp_path):
+        """Log records successful and failed interpolation counts with percentages."""
+        wf = self._make_workflow(tmp_path)
+        wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "120" in content    # n_success
+        assert "30" in content     # n_fail
+        assert "80.0%" in content
+
+    def test_log_dart_success_label(self, tmp_path):
+        """Log writes 'success' when DART exit code is 0."""
+        wf = self._make_workflow(tmp_path)
+        wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "success" in content
+
+    def test_log_dart_failed_label(self, tmp_path):
+        """Log writes 'FAILED' when DART exit code is non-zero."""
+        wf = self._make_workflow(tmp_path)
+        kwargs = self._common_kwargs(tmp_path)
+        kwargs["dart_exit_code"] = 1
+        wf._write_pair_summary_log(**kwargs)
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "FAILED" in content
+
+    def test_log_missing_qc_shows_fallback(self, tmp_path):
+        """Log writes a fallback message when interpolation counts are None."""
+        wf = self._make_workflow(tmp_path)
+        kwargs = self._common_kwargs(tmp_path)
+        kwargs["n_success"] = None
+        kwargs["n_fail"] = None
+        wf._write_pair_summary_log(**kwargs)
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "not found or QC column absent" in content
+
+    def test_log_write_failure_is_non_fatal(self, tmp_path, capsys):
+        """Log write failure prints a warning but does not raise."""
+        wf = self._make_workflow(tmp_path)
+        kwargs = self._common_kwargs(tmp_path)
+        # Point output_folder to a non-existent path to force write failure
+        wf.config["output_folder"] = str(tmp_path / "nonexistent_dir")
+        wf._write_pair_summary_log(**kwargs)  # must not raise
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.out
+
+    def test_log_written_on_dart_failure(self, tmp_path):
+        """Summary log is present even when DART exit code is non-zero."""
+        wf = self._make_workflow(tmp_path)
+        kwargs = self._common_kwargs(tmp_path)
+        kwargs["dart_exit_code"] = 1
+        kwargs["n_success"] = None
+        kwargs["n_fail"] = None
+        wf._write_pair_summary_log(**kwargs)
+        assert (tmp_path / "output" / "pair_summary_0003.log").exists()
 
 
 class TestValidateModelFileTimestamps:

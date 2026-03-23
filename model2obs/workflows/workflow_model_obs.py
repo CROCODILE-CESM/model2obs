@@ -1,7 +1,7 @@
 """Model-observation comparison workflow for model2obs."""
 
 import concurrent.futures
-from datetime import timedelta
+from datetime import datetime, timedelta
 import glob
 from importlib.resources import files
 import os
@@ -460,6 +460,7 @@ class WorkflowModelObs(workflow.Workflow):
                         self._process_model_obs_pair(
                             tmp_model_in_file, obs_in_file, trim_obs, counter,
                             hull_polygon, hull_points, force_obs_time,
+                            original_model_file=model_in_f,
                         )
 
                         if snapshots_nb > 1:
@@ -494,7 +495,8 @@ class WorkflowModelObs(workflow.Workflow):
     def _process_model_obs_pair(self, model_in_file: str, obs_in_file: str,
                                trim_obs: bool, counter: int, hull_polygon: Optional[Any],
                                hull_points: Optional[np.ndarray], force_obs_time: bool,
-                               precomputed_model_time: Optional[Tuple[int, int]] = None) -> None:
+                               precomputed_model_time: Optional[Tuple[int, int]] = None,
+                               original_model_file: Optional[str] = None) -> None:
         """Process a single model-observation file pair.
 
         This method is self-contained and thread-safe: it creates its own
@@ -503,12 +505,15 @@ class WorkflowModelObs(workflow.Workflow):
         pre-configured base content, so it can be called from multiple threads
         simultaneously without shared-state conflicts.
 
-        The per-pair log is written to
-        ``<output_folder>/perfect_model_obs_<NNNN>.log`` instead of a shared
-        ``perfect_model_obs.log`` in the current working directory.
+        The per-pair DART log is written to
+        ``<output_folder>/perfect_model_obs_<NNNN>.log``.  A human-readable
+        pair summary (files used, observation counts, interpolation success
+        rate) is written to ``<output_folder>/pair_summary_<NNNN>.log``
+        regardless of whether DART exits successfully.
 
         Args:
-            model_in_file: Path to the (possibly sliced) model NetCDF file.
+            model_in_file: Path to the (possibly sliced) model NetCDF file
+                submitted to DART.
             obs_in_file: Path to the obs_seq input file.
             trim_obs: Whether to trim observations to model grid boundaries.
             counter: Zero-based pair index used to generate unique filenames.
@@ -519,6 +524,10 @@ class WorkflowModelObs(workflow.Workflow):
                 from the model file.  When provided, the xarray read inside this
                 method is skipped, which avoids thread-safety issues with
                 xarray's ``CachingFileManager`` during parallel execution.
+            original_model_file: Path to the original (un-sliced) model file,
+                when *model_in_file* is a temporary ncks slice.  Used only for
+                the pair summary log.  Defaults to ``None`` (no separate
+                "original" entry is written).
         """
         obs_in_filename = os.path.basename(obs_in_file)
         file_number = f"{counter:04d}"
@@ -538,6 +547,15 @@ class WorkflowModelObs(workflow.Workflow):
 
         obs_output_filename = f"obs_seq_{file_number}.out"
         obs_output_path = os.path.join(self.config['output_folder'], obs_output_filename)
+
+        # Collect obs_seq.in statistics for the pair summary log (before DART runs)
+        _obs_seq_in = obsq.ObsSequence(obs_in_file_nml)
+        _obs_submitted_count = len(_obs_seq_in.df)
+        _obs_min_time = _obs_seq_in.df["time"].min()
+        _obs_max_time = _obs_seq_in.df["time"].max()
+        _obs_original_count: Optional[int] = None
+        if obs_in_file != obs_in_file_nml:
+            _obs_original_count = len(obsq.ObsSequence(obs_in_file).df)
 
         print(f"        Processing file #{counter + 1}:")
         print(f"          Model input file: {model_in_file}")
@@ -580,6 +598,9 @@ class WorkflowModelObs(workflow.Workflow):
                 local_nml.update_namelist_param(
                     "perfect_model_obs_nml", "init_time_seconds", model_time_seconds, string=False
                 )
+                _log_time_days, _log_time_seconds, _log_time_source = (
+                    model_time_days, model_time_seconds, "model file"
+                )
             else:
                 print("          Retrieving obs time from obs_seq and updating namelist...")
                 obs_time_days, obs_time_seconds = file_utils.get_obs_time_in_days_seconds(obs_in_file)
@@ -588,6 +609,9 @@ class WorkflowModelObs(workflow.Workflow):
                 )
                 local_nml.update_namelist_param(
                     "perfect_model_obs_nml", "init_time_seconds", obs_time_seconds, string=False
+                )
+                _log_time_days, _log_time_seconds, _log_time_source = (
+                    obs_time_days, obs_time_seconds, "obs midpoint"
                 )
 
             # Write the pair-specific namelist to the persistent backup folder
@@ -619,10 +643,45 @@ class WorkflowModelObs(workflow.Workflow):
                 )
                 process.wait()
 
-            if process.returncode != 0:
+            _dart_exit_code = process.returncode
+
+            # Collect interpolation counts from obs_seq.out for the pair summary log
+            _n_success: Optional[int] = None
+            _n_fail: Optional[int] = None
+            if os.path.exists(obs_output_path):
+                try:
+                    _perf_out = obsq.ObsSequence(obs_output_path)
+                    _qc_cols = [c for c in _perf_out.df.columns if c.endswith("_QC")]
+                    if _qc_cols:
+                        _qc_vals = _perf_out.df[_qc_cols[0]]
+                        _n_success = int((_qc_vals <= 2).sum())
+                        _n_fail = int((_qc_vals > 2).sum())
+                except Exception:  # pylint: disable=broad-except
+                    pass
+
+            self._write_pair_summary_log(
+                file_number=file_number,
+                model_in_file=model_in_file,
+                original_model_file=original_model_file,
+                log_time_days=_log_time_days,
+                log_time_seconds=_log_time_seconds,
+                time_source=_log_time_source,
+                obs_in_file_nml=obs_in_file_nml,
+                obs_in_file_orig=obs_in_file,
+                obs_min_time=_obs_min_time,
+                obs_max_time=_obs_max_time,
+                obs_submitted_count=_obs_submitted_count,
+                obs_original_count=_obs_original_count,
+                dart_exit_code=_dart_exit_code,
+                obs_output_path=obs_output_path,
+                n_success=_n_success,
+                n_fail=_n_fail,
+            )
+
+            if _dart_exit_code != 0:
                 raise RuntimeError(
                     f"perfect_model_obs failed for file #{counter + 1} "
-                    f"(exit code {process.returncode}). "
+                    f"(exit code {_dart_exit_code}). "
                     f"See log: {log_file_path}"
                 )
 
@@ -631,6 +690,113 @@ class WorkflowModelObs(workflow.Workflow):
             print(f"          perfect_model_obs log saved to: {log_file_path}")
         finally:
             shutil.rmtree(worker_tmpdir, ignore_errors=True)
+
+    def _write_pair_summary_log(
+        self,
+        file_number: str,
+        model_in_file: str,
+        original_model_file: Optional[str],
+        log_time_days: int,
+        log_time_seconds: int,
+        time_source: str,
+        obs_in_file_nml: str,
+        obs_in_file_orig: str,
+        obs_min_time: pd.Timestamp,
+        obs_max_time: pd.Timestamp,
+        obs_submitted_count: int,
+        obs_original_count: Optional[int],
+        dart_exit_code: int,
+        obs_output_path: str,
+        n_success: Optional[int],
+        n_fail: Optional[int],
+    ) -> None:
+        """Write a plain-text key-value summary log for one model-observation pair.
+
+        The log is written to ``<output_folder>/pair_summary_<file_number>.log``.
+        If writing fails for any reason (e.g. disk full, permission error), a
+        warning is printed and the workflow continues unaffected.
+
+        Args:
+            file_number: Zero-padded 4-digit pair counter string, e.g. ``'0003'``.
+            model_in_file: Path to the model file submitted to DART (may be a
+                temporary ncks slice).
+            original_model_file: Path to the original (un-sliced) model file, or
+                ``None`` when *model_in_file* is already the original.
+            log_time_days: DART init_time days component (relative to 1601-01-01).
+            log_time_seconds: DART init_time seconds component.
+            time_source: Human-readable label for the time origin, e.g.
+                ``'model file'`` or ``'obs midpoint'``.
+            obs_in_file_nml: Path to the obs_seq file passed to DART (may be a
+                trimmed copy).
+            obs_in_file_orig: Path to the original obs_seq file before trimming.
+            obs_min_time: Earliest observation time in *obs_in_file_nml*.
+            obs_max_time: Latest observation time in *obs_in_file_nml*.
+            obs_submitted_count: Number of observations submitted to DART.
+            obs_original_count: Number of observations in *obs_in_file_orig*
+                before trimming, or ``None`` if trimming was not applied.
+            dart_exit_code: Return code from ``perfect_model_obs``.
+            obs_output_path: Path to the ``obs_seq_NNNN.out`` file produced by DART.
+            n_success: Number of successfully interpolated observations (QC ≤ 2),
+                or ``None`` if the output could not be read.
+            n_fail: Number of failed interpolations (QC > 2), or ``None`` if the
+                output could not be read.
+        """
+        _DART_EPOCH = datetime(1601, 1, 1)
+        _W = 32  # label column width for alignment
+
+        def _line(label: str, value: str) -> str:
+            return f"{label:<{_W}}: {value}"
+
+        try:
+            time_used = _DART_EPOCH + timedelta(days=log_time_days, seconds=log_time_seconds)
+            time_used_str = time_used.isoformat(sep="T", timespec="seconds")
+
+            lines = [
+                "=== Model-Observation Pair Summary ===",
+                _line("Pair number", file_number),
+                "---------- Model input ----------",
+                _line("NC file submitted to DART", model_in_file),
+            ]
+            if original_model_file and original_model_file != model_in_file:
+                lines.append(_line("Original NC file", original_model_file))
+            lines.append(_line("Time used", f"{time_used_str}  (from {time_source})"))
+
+            lines.append("---------- Observation input ----------")
+            lines.append(_line("obs_seq.in file", obs_in_file_nml))
+            if obs_in_file_orig != obs_in_file_nml:
+                lines.append(_line("Original obs_seq.in", obs_in_file_orig))
+            lines.append(_line("obs_seq.in time min",
+                                pd.Timestamp(obs_min_time).isoformat(sep="T", timespec="seconds")))
+            lines.append(_line("obs_seq.in time max",
+                                pd.Timestamp(obs_max_time).isoformat(sep="T", timespec="seconds")))
+            submitted_str = str(obs_submitted_count)
+            if obs_original_count is not None:
+                submitted_str += f"  ({obs_original_count} in original obs_seq.in before trimming)"
+            lines.append(_line("Obs submitted to DART", submitted_str))
+
+            lines.append("---------- DART output ----------")
+            lines.append(_line("obs_seq.out file", obs_output_path))
+            dart_status = "success" if dart_exit_code == 0 else "FAILED"
+            lines.append(_line("DART exit code", f"{dart_exit_code}  ({dart_status})"))
+            if n_success is not None and n_fail is not None:
+                total = n_success + n_fail
+                pct_ok = 100.0 * n_success / total if total > 0 else 0.0
+                pct_fail = 100.0 * n_fail / total if total > 0 else 0.0
+                lines.append(_line("Successfully interpolated obs",
+                                   f"{n_success} / {total}  ({pct_ok:.1f}%)"))
+                lines.append(_line("Failed interpolations",
+                                   f"{n_fail} / {total}  ({pct_fail:.1f}%)"))
+            else:
+                lines.append(_line("Interpolation counts",
+                                   "obs_seq.out not found or QC column absent"))
+
+            log_path = os.path.join(self.config["output_folder"],
+                                    f"pair_summary_{file_number}.log")
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            print(f"          Pair summary log saved to: {log_path}")
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"          WARNING: could not write pair summary log: {exc}")
 
     def _merge_pair_to_parquet(self, perf_obs_file: str, orig_obs_file: str, 
                               parquet_path: str) -> None:
