@@ -62,11 +62,13 @@ addopts = [
 ]
 testpaths = ["tests"]
 pythonpath = ["."]
+norecursedirs = ["sanity"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
     "mocking: marks tests focused on external dependency mocking",
+    "sanity: end-to-end sanity checks requiring tutorial data and DART (run with 'pytest tests/sanity/')",
 ]
 
 [tool.coverage.run]

@@ -346,6 +346,38 @@ perfect-model-obs -c config.yaml --no-matching
 perfect-model-obs -c config.yaml --parquet-only
 ```
 
+### Sanity Tests
+
+An end-to-end sanity test verifies that serial and parallel workflow runs
+produce identical parquet output.  This test is **not included in the default
+`pytest tests/` run** because it requires tutorial data and a compiled DART
+installation, and takes significant time to complete.
+
+**Prerequisites:**
+
+1. Set the required environment variables:
+   ```bash
+   export TUTORIAL_DATA_PATH=/path/to/tutorial/data
+   export DART_ROOT_PATH=/path/to/DART
+   ```
+
+2. Download the tutorial datasets (if not already present):
+   ```bash
+   download_tutorials_data --destination $TUTORIAL_DATA_PATH
+   ```
+
+3. Ensure DART is compiled for MOM6 (`$DART_ROOT_PATH/models/MOM6/work/perfect_model_obs` must exist).
+
+**Run the sanity test:**
+
+```bash
+pytest tests/sanity/
+```
+
+The test runs the serial workflow from `tutorials/config_tutorial_1.yaml` and the
+parallel workflow from `tutorials/config_tutorial_1_parallel.yaml`, then asserts
+that every row in both parquet outputs is identical (order-independent).
+
 ## How to Cite
 
 If you use model2obs in your research, please cite it as:
