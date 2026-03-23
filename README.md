@@ -390,8 +390,15 @@ produce identical parquet output.
 **Run the sanity test:**
 
 ```bash
+# Recommended: show live workflow output as the test runs
+pytest tests/sanity/ -s -v
+
+# Minimal output (just pass/fail)
 pytest tests/sanity/
 ```
+
+The `-s` flag disables output capture so workflow progress prints to the terminal;
+`-v` shows the full test name and result.
 
 The test runs the serial workflow from `tutorials/config_tutorial_1.yaml` and the
 parallel workflow from `tutorials/config_tutorial_1_parallel.yaml`, then asserts
