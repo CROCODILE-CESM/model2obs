@@ -9,7 +9,7 @@ resulting parquet tables is identical (order-independent).
 requires tutorial data, a compiled DART installation, and significant wall-clock
 time.  Run it explicitly as an ad-hoc sanity check:
 
-    pytest tests/sanity/
+    pytest tests/sanity/ -s -v
 
 Prerequisites:
 - ``$TUTORIAL_DATA_PATH`` environment variable must point to the directory that
@@ -20,13 +20,32 @@ Prerequisites:
 - Tutorial data must already be downloaded.  If not, run::
 
       download_tutorials_data --destination <TUTORIAL_DATA_PATH>
+
+When the parquet comparison fails, three automatic diagnostic steps run and
+print to stdout (visible with ``-s``):
+
+1. **obs_seq.out comparison** – Each ``obs_seq_NNNN.out`` file is loaded with
+   ``pydartdiags`` and compared pair-by-pair.  Files are reported as
+   ``MATCH``, ``MISMATCH``, ``EXTRA`` (only in one workflow), or ``MISSING``.
+
+2. **Model input equivalence** – The serial single-file ``in_mom6/`` dataset
+   is compared with the concatenated ``in_mom6_par/`` multi-file dataset using
+   xarray.  Any differing variables are listed.
+
+3. **Failure statistics** – Rows that differ between the two parquet tables are
+   summarised by observation type, day, and QC code.  Note: the parquet does
+   not store a thread-number column, so per-thread attribution is not available.
 """
 
 import os
 from pathlib import Path
+from typing import Dict
 
 import pandas as pd
 import pytest
+import xarray as xr
+
+import pydartdiags.obs_sequence.obs_sequence as obsq
 
 from model2obs.utils.config import read_config
 from model2obs.workflows import WorkflowModelObs
@@ -117,8 +136,270 @@ def _load_sorted_parquet(folder: str) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Sanity test
+# Failure diagnostics
 # ---------------------------------------------------------------------------
+
+def _compare_obs_seq_files(serial_output_folder: str, parallel_output_folder: str) -> None:
+    """Compare ``obs_seq_NNNN.out`` files pair-by-pair between the two workflows.
+
+    Each file is loaded with ``pydartdiags.ObsSequence``; the resulting
+    DataFrames are compared.  Results are printed to stdout as
+    MATCH / MISMATCH / EXTRA / MISSING per counter.
+
+    Args:
+        serial_output_folder: Path to the serial workflow ``output_folder``.
+        parallel_output_folder: Path to the parallel workflow ``output_folder``.
+    """
+    print("\n=== DIAGNOSTIC 1: obs_seq.out file comparison ===")
+    serial_dir = Path(serial_output_folder)
+    parallel_dir = Path(parallel_output_folder)
+
+    def _counter(p: Path) -> str:
+        """Extract the 4-digit counter from a filename like obs_seq_0003.out."""
+        return p.stem.split("_")[-1]
+
+    serial_files: Dict[str, Path] = {
+        _counter(f): f for f in sorted(serial_dir.glob("obs_seq_*.out"))
+    }
+    parallel_files: Dict[str, Path] = {
+        _counter(f): f for f in sorted(parallel_dir.glob("obs_seq_*.out"))
+    }
+
+    all_counters = sorted(set(serial_files) | set(parallel_files))
+    if not all_counters:
+        print("  No obs_seq_*.out files found in either workflow output folder.")
+        return
+
+    mismatch_count = 0
+    for ctr in all_counters:
+        if ctr not in serial_files:
+            print(f"  obs_seq_{ctr}.out  EXTRA  (only in parallel)")
+            mismatch_count += 1
+            continue
+        if ctr not in parallel_files:
+            print(f"  obs_seq_{ctr}.out  MISSING from parallel")
+            mismatch_count += 1
+            continue
+
+        try:
+            s_seq = obsq.ObsSequence(str(serial_files[ctr]))
+            p_seq = obsq.ObsSequence(str(parallel_files[ctr]))
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"  obs_seq_{ctr}.out  ERROR loading: {exc}")
+            mismatch_count += 1
+            continue
+
+        s_df = s_seq.df.reset_index(drop=True)
+        p_df = p_seq.df.reset_index(drop=True)
+
+        n_serial = len(s_df)
+        n_parallel = len(p_df)
+        if s_df.equals(p_df):
+            print(f"  obs_seq_{ctr}.out  MATCH  ({n_serial} rows)")
+        else:
+            n_diff = (s_df != p_df).any(axis=1).sum() if s_df.shape == p_df.shape else abs(n_serial - n_parallel)
+            print(
+                f"  obs_seq_{ctr}.out  MISMATCH  "
+                f"(serial={n_serial} rows, parallel={n_parallel} rows, "
+                f"~{n_diff} differing rows)"
+            )
+            mismatch_count += 1
+
+    if mismatch_count == 0:
+        print("  All obs_seq.out files match. The difference must be in the merge step.")
+    else:
+        print(f"  {mismatch_count}/{len(all_counters)} file(s) differ.")
+
+
+def _compare_model_inputs(serial_config: dict, parallel_config: dict) -> None:
+    """Compare serial and parallel model input datasets using xarray.
+
+    Serial workflow uses a single file from ``in_mom6/``; parallel workflow
+    uses multiple files from ``in_mom6_par/`` (same data, split differently).
+    Both are sorted by time before comparison.
+
+    Args:
+        serial_config: Resolved config dict for the serial workflow.
+        parallel_config: Resolved config dict for the parallel workflow.
+    """
+    print("\n=== DIAGNOSTIC 2: Model input data equivalence ===")
+    serial_folder = serial_config.get("model_files_folder", "")
+    parallel_folder = parallel_config.get("model_files_folder", "")
+
+    serial_files = sorted(Path(serial_folder).glob("*.nc"))
+    parallel_files = sorted(Path(parallel_folder).glob("*.nc"))
+
+    if not serial_files:
+        print(f"  No .nc files found in serial model folder: {serial_folder}")
+        return
+    if not parallel_files:
+        print(f"  No .nc files found in parallel model folder: {parallel_folder}")
+        return
+
+    print(f"  Serial:   {len(serial_files)} file(s) in {serial_folder}")
+    print(f"  Parallel: {len(parallel_files)} file(s) in {parallel_folder}")
+
+    try:
+        ds_serial = xr.open_mfdataset(
+            [str(f) for f in serial_files], combine="by_coords"
+        ).sortby("time")
+        ds_parallel = xr.open_mfdataset(
+            [str(f) for f in parallel_files], combine="by_coords"
+        ).sortby("time")
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"  ERROR opening datasets: {exc}")
+        return
+
+    # Check that the two have the same variables
+    serial_vars = set(ds_serial.data_vars)
+    parallel_vars = set(ds_parallel.data_vars)
+    if serial_vars != parallel_vars:
+        print(f"  Variable mismatch: serial={serial_vars - parallel_vars} extra, "
+              f"parallel={parallel_vars - serial_vars} extra")
+        return
+
+    overall_equal = ds_serial.equals(ds_parallel)
+    if overall_equal:
+        print("  Model input data are IDENTICAL across serial and parallel inputs.")
+    else:
+        print("  Model input data DIFFER. Checking variable by variable:")
+        for var in sorted(serial_vars):
+            try:
+                if not ds_serial[var].equals(ds_parallel[var]):
+                    print(f"    {var}: DIFFERS")
+                else:
+                    print(f"    {var}: ok")
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"    {var}: ERROR comparing ({exc})")
+
+    ds_serial.close()
+    ds_parallel.close()
+
+
+def _report_diff_statistics(serial_df: pd.DataFrame, parallel_df: pd.DataFrame) -> None:
+    """Print statistics about rows that differ between the two parquet tables.
+
+    Performs an outer-join on ``(time, latitude, longitude, vertical, type)``
+    and reports mismatching rows grouped by observation type, day, and QC code.
+
+    Note: the parquet output does not include a thread-number column, so
+    per-thread attribution is not possible from the parquet alone.
+
+    Args:
+        serial_df: Sorted parquet DataFrame from the serial workflow.
+        parallel_df: Sorted parquet DataFrame from the parallel workflow.
+    """
+    print("\n=== DIAGNOSTIC 3: Failure statistics ===")
+    join_keys = [c for c in _SORT_COLS if c in serial_df.columns and c in parallel_df.columns]
+
+    merged = pd.merge(
+        serial_df,
+        parallel_df,
+        on=join_keys,
+        how="outer",
+        suffixes=("_serial", "_parallel"),
+        indicator=True,
+    )
+
+    only_serial = merged[merged["_merge"] == "left_only"]
+    only_parallel = merged[merged["_merge"] == "right_only"]
+    both = merged[merged["_merge"] == "both"]
+
+    # Rows present in only one workflow
+    if len(only_serial) > 0:
+        print(f"  Rows ONLY in serial output:   {len(only_serial)}")
+    if len(only_parallel) > 0:
+        print(f"  Rows ONLY in parallel output: {len(only_parallel)}")
+
+    # For rows present in both, find value differences in key numeric columns
+    value_cols = [c for c in ["interpolated_model_serial", "obs_serial"] if c in both.columns]
+    counterparts = {
+        "interpolated_model_serial": "interpolated_model_parallel",
+        "obs_serial": "obs_parallel",
+    }
+    diff_mask = pd.Series(False, index=both.index)
+    for col, other in counterparts.items():
+        if col in both.columns and other in both.columns:
+            diff_mask |= (both[col] - both[other]).abs() > 1e-12
+
+    value_diffs = both[diff_mask]
+    print(f"  Rows present in both but with different values: {len(value_diffs)}")
+
+    all_diff = pd.concat([only_serial, only_parallel, value_diffs], ignore_index=True)
+    if all_diff.empty:
+        print("  (No differing rows found via outer-join — difference may be in row count or dtypes.)")
+        return
+
+    # Resolve type column (may be from join key or suffixed)
+    type_col = "type" if "type" in all_diff.columns else None
+
+    if type_col:
+        print("\n  Differing rows by observation type:")
+        for obs_type, cnt in all_diff[type_col].value_counts().items():
+            print(f"    {obs_type}: {cnt} rows")
+
+    # Day-level breakdown
+    time_col = "time" if "time" in all_diff.columns else None
+    if time_col:
+        days = pd.to_datetime(all_diff[time_col]).dt.date
+        print("\n  Differing rows by day:")
+        for day, cnt in days.value_counts().sort_index().items():
+            print(f"    {day}: {cnt} rows")
+
+    # QC breakdown (check both suffixed variants)
+    for qc_col in ["interpolated_model_QC_serial", "interpolated_model_QC_parallel", "interpolated_model_QC"]:
+        if qc_col in all_diff.columns:
+            print(f"\n  QC code distribution in differing rows ({qc_col}):")
+            for code, cnt in all_diff[qc_col].value_counts().sort_index().items():
+                print(f"    {code}: {cnt} rows")
+            break
+
+    print(
+        "\n  NOTE: The parquet output does not include a thread-number column,\n"
+        "  so per-thread attribution of differing rows is not available here.\n"
+        "  Check the per-file logs in the parallel output_folder for thread details."
+    )
+
+
+def _diagnose_failure(
+    serial_config: dict,
+    parallel_config: dict,
+    serial_df: pd.DataFrame,
+    parallel_df: pd.DataFrame,
+) -> None:
+    """Run all three diagnostic steps and print results to stdout.
+
+    Call this inside an ``except AssertionError`` block; it does not re-raise.
+
+    Args:
+        serial_config: Resolved config dict for the serial workflow.
+        parallel_config: Resolved config dict for the parallel workflow.
+        serial_df: Sorted parquet DataFrame from the serial workflow.
+        parallel_df: Sorted parquet DataFrame from the parallel workflow.
+    """
+    print("\n" + "=" * 70)
+    print("PARITY TEST FAILED — running diagnostics …")
+    print("=" * 70)
+
+    try:
+        _compare_obs_seq_files(
+            serial_config["output_folder"],
+            parallel_config["output_folder"],
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"  Diagnostic 1 raised an unexpected error: {exc}")
+
+    try:
+        _compare_model_inputs(serial_config, parallel_config)
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"  Diagnostic 2 raised an unexpected error: {exc}")
+
+    try:
+        _report_diff_statistics(serial_df, parallel_df)
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"  Diagnostic 3 raised an unexpected error: {exc}")
+
+    print("=" * 70 + "\n")
 
 @pytest.mark.sanity
 def test_serial_parallel_parquet_parity() -> None:
@@ -129,25 +410,34 @@ def test_serial_parallel_parquet_parity() -> None:
            workflow (config_tutorial_1_parallel.yaml) are both run
     Then:  Their parquet outputs contain the same rows in the same columns,
            regardless of row order
+
+    If the assertion fails, three diagnostic steps run automatically and print
+    structured information to stdout (pass ``-s`` to pytest to see them).
     """
     _require_tutorial_data()
 
     # Run serial workflow
     serial_workflow = WorkflowModelObs.from_config_file(str(_SERIAL_CONFIG))
     serial_workflow.run(clear_output=True)
-    serial_parquet_folder = serial_workflow.get_config("parquet_folder")
+    serial_config = serial_workflow.config
+    serial_parquet_folder = serial_config["parquet_folder"]
 
     # Run parallel workflow
     parallel_workflow = WorkflowModelObs.from_config_file(str(_PARALLEL_CONFIG))
     parallel_workflow.run(clear_output=True, parallel=True)
-    parallel_parquet_folder = parallel_workflow.get_config("parquet_folder")
+    parallel_config = parallel_workflow.config
+    parallel_parquet_folder = parallel_config["parquet_folder"]
 
     serial_df = _load_sorted_parquet(serial_parquet_folder)
     parallel_df = _load_sorted_parquet(parallel_parquet_folder)
 
-    pd.testing.assert_frame_equal(
-        serial_df.reset_index(drop=True),
-        parallel_df.reset_index(drop=True),
-        check_like=True,  # column order does not matter
-        obj="Serial vs parallel parquet output",
-    )
+    try:
+        pd.testing.assert_frame_equal(
+            serial_df.reset_index(drop=True),
+            parallel_df.reset_index(drop=True),
+            check_like=True,  # column order does not matter
+            obj="Serial vs parallel parquet output",
+        )
+    except AssertionError:
+        _diagnose_failure(serial_config, parallel_config, serial_df, parallel_df)
+        raise

@@ -404,6 +404,26 @@ The test runs the serial workflow from `tutorials/config_tutorial_1.yaml` and th
 parallel workflow from `tutorials/config_tutorial_1_parallel.yaml`, then asserts
 that every row in both parquet outputs is identical (order-independent).
 
+**Failure diagnostics:**
+
+If the parity assertion fails, three diagnostic steps run automatically and print
+structured information to stdout (visible when using `-s`):
+
+1. **obs_seq.out comparison** – Each `obs_seq_NNNN.out` file is loaded and compared
+   pair-by-pair.  Results are reported as `MATCH`, `MISMATCH (N rows differ)`,
+   `EXTRA` (only in one workflow), or `MISSING`.
+
+2. **Model input equivalence** – The serial single-file `in_mom6/` dataset is
+   compared with the concatenated `in_mom6_par/` multi-file dataset using xarray.
+   Any differing variables are listed.
+
+3. **Failure statistics** – Rows that differ between the two parquet tables are
+   summarised by observation type, day, and QC code.
+
+> **Note:** The parquet output does not record a thread-number column, so
+> per-thread attribution of differing rows is not available from the parquet alone.
+> Per-file logs in the parallel `output_folder` provide additional context.
+
 ## How to Cite
 
 If you use model2obs in your research, please cite it as:
