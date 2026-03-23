@@ -346,12 +346,31 @@ perfect-model-obs -c config.yaml --no-matching
 perfect-model-obs -c config.yaml --parquet-only
 ```
 
-### Sanity Tests
+### Tests
 
-An end-to-end sanity test verifies that serial and parallel workflow runs
-produce identical parquet output.  This test is **not included in the default
-`pytest tests/` run** because it requires tutorial data and a compiled DART
-installation, and takes significant time to complete.
+#### Run main tests
+
+To test your installation of model2obs, run:
+
+```bash
+pytest tests/
+```
+
+Note that this executes all tests except the thorough sanity test that compares
+the parquet output of the serial and parallel workflows when these are called on
+the same real model output (stored as one file for the serial workflow and two
+files for the parallel workflow). The thorough test is exclude from the regular
+tests because it is both time and resource consuming (it requires an HPC setup)
+and depends on the tutorial data (which are 60+ GB unzipped). The equivalence
+between the two workflows is also tested by `pytest tests/` but not on real
+data: while that should be enough, the thorough test is provided in case
+something goes south at some point in the development and/or if there is the
+suspicion that the general tests are not testing the workflows properly.
+
+#### Run the extra test
+
+The end-to-end thorough sanity test verifies that serial and parallel workflow runs
+produce identical parquet output.  
 
 **Prerequisites:**
 
