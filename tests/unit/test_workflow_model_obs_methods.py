@@ -1044,6 +1044,189 @@ class TestProcessModelFileWorker:
         tmp_files = list(Path(config['tmp_folder']).iterdir())
         assert tmp_files == [], f"Temp files not cleaned up: {tmp_files}"
 
+    @patch.object(WorkflowModelObs, '_process_model_obs_pair')
+    def test_worker_prematched_skips_time_matching(self, mock_process_pair, tmp_path):
+        """When prematched_pairs is given, worker processes exactly those pairs.
+
+        No obsq.ObsSequence reads should occur (time-matching already done).
+        The counter is base_counter + local index within the prematched list.
+        """
+        import xarray as xr
+        config = self._make_config(tmp_path)
+
+        model_file = str(tmp_path / 'model.nc')
+        ds = xr.Dataset(coords={"time": pd.date_range("2020-01-01", periods=1)})
+        ds.to_netcdf(model_file)
+
+        obs_file = str(tmp_path / 'obs.in')
+        prematched = [(0, obs_file)]
+
+        workflow = WorkflowModelObs(config)
+        workflow._base_nml_content = "&model_nml\n/"
+
+        # obsq.ObsSequence must NOT be called; time-matching already done
+        with patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence') as mock_obsq:
+            count = workflow._process_model_file_worker(
+                model_file, [], base_counter=7,
+                trim_obs=False, hull_polygon=None, hull_points=None,
+                force_obs_time=False,
+                prematched_pairs=prematched,
+            )
+
+        mock_obsq.assert_not_called()
+        assert count == 1
+        mock_process_pair.assert_called_once()
+        # Counter must be base_counter + 0 = 7
+        assert mock_process_pair.call_args[0][3] == 7
+
+    @patch.object(WorkflowModelObs, '_process_model_obs_pair')
+    def test_worker_prematched_empty_list_processes_nothing(self, mock_process_pair, tmp_path):
+        """Worker with an empty prematched list processes zero pairs."""
+        import xarray as xr
+        config = self._make_config(tmp_path)
+
+        model_file = str(tmp_path / 'model.nc')
+        xr.Dataset(coords={"time": pd.date_range("2020-01-01", periods=1)}).to_netcdf(model_file)
+
+        workflow = WorkflowModelObs(config)
+        workflow._base_nml_content = "&model_nml\n/"
+
+        count = workflow._process_model_file_worker(
+            model_file, [], base_counter=0,
+            trim_obs=False, hull_polygon=None, hull_points=None,
+            force_obs_time=False,
+            prematched_pairs=[],
+        )
+
+        assert count == 0
+        mock_process_pair.assert_not_called()
+
+
+class TestPrecomputeTimeMatching:
+    """Tests for _precompute_time_matching() method."""
+
+    def _make_config(self, tmp_path):
+        for d in ['output', 'bck', 'dart', 'tmp']:
+            (tmp_path / d).mkdir(exist_ok=True)
+        return {
+            'ocean_model': 'MOM6',
+            'model_files_folder': str(tmp_path),
+            'obs_seq_in_folder': str(tmp_path),
+            'output_folder': str(tmp_path / 'output'),
+            'template_file': 'template.nc',
+            'static_file': 'static.nc',
+            'ocean_geometry': 'ocean.nc',
+            'perfect_model_obs_dir': str(tmp_path / 'dart'),
+            'parquet_folder': str(tmp_path / 'parquet'),
+            'input_nml_bck': str(tmp_path / 'bck'),
+            'tmp_folder': str(tmp_path / 'tmp'),
+            'time_window': {'days': 1, 'seconds': 0},  # ±12 h window
+        }
+
+    def _make_obs_mock(self, t_min: pd.Timestamp, t_max: pd.Timestamp):
+        m = Mock()
+        m.df.time.min.return_value = t_min
+        m.df.time.max.return_value = t_max
+        return m
+
+    def test_assigns_obs_to_correct_model_file(self, tmp_path):
+        """Each obs file is assigned to the model file whose snapshot time is within ±12 h.
+
+        Setup:
+          model_a.nc  — one snapshot at 2020-01-01T12:00
+          model_b.nc  — one snapshot at 2020-01-02T12:00
+          obs_a.in    — time range near 2020-01-01  → should match model_a
+          obs_b.in    — time range near 2020-01-02  → should match model_b
+        """
+        import xarray as xr
+        config = self._make_config(tmp_path)
+
+        model_a = str(tmp_path / 'model_a.nc')
+        model_b = str(tmp_path / 'model_b.nc')
+        xr.Dataset(coords={"time": [pd.Timestamp("2020-01-01T12:00")]}).to_netcdf(model_a)
+        xr.Dataset(coords={"time": [pd.Timestamp("2020-01-02T12:00")]}).to_netcdf(model_b)
+
+        obs_a = str(tmp_path / 'obs_a.in')
+        obs_b = str(tmp_path / 'obs_b.in')
+
+        obs_a_mock = self._make_obs_mock(
+            pd.Timestamp("2020-01-01T06:00"), pd.Timestamp("2020-01-01T18:00")
+        )
+        obs_b_mock = self._make_obs_mock(
+            pd.Timestamp("2020-01-02T06:00"), pd.Timestamp("2020-01-02T18:00")
+        )
+
+        wf = WorkflowModelObs(config)
+        wf._base_nml_content = "&model_nml\n/"
+
+        with patch(
+            'model2obs.workflows.workflow_model_obs.obsq.ObsSequence',
+            side_effect=[obs_a_mock, obs_b_mock],
+        ):
+            result = wf._precompute_time_matching([model_a, model_b], [obs_a, obs_b])
+
+        assert result[model_a] == [(0, obs_a)]
+        assert result[model_b] == [(0, obs_b)]
+
+    def test_obs_file_not_assigned_twice(self, tmp_path):
+        """An obs file matched by the first model file is not re-matched by the second.
+
+        Both model files cover the same time window, but obs_a should only appear
+        once in the result (assigned to the first model file that matches it).
+        """
+        import xarray as xr
+        config = self._make_config(tmp_path)
+
+        same_time = pd.Timestamp("2020-01-01T12:00")
+        model_a = str(tmp_path / 'model_a.nc')
+        model_b = str(tmp_path / 'model_b.nc')
+        xr.Dataset(coords={"time": [same_time]}).to_netcdf(model_a)
+        xr.Dataset(coords={"time": [same_time]}).to_netcdf(model_b)
+
+        obs_a = str(tmp_path / 'obs_a.in')
+        obs_a_mock = self._make_obs_mock(
+            pd.Timestamp("2020-01-01T06:00"), pd.Timestamp("2020-01-01T18:00")
+        )
+
+        wf = WorkflowModelObs(config)
+        wf._base_nml_content = "&model_nml\n/"
+
+        with patch(
+            'model2obs.workflows.workflow_model_obs.obsq.ObsSequence',
+            return_value=obs_a_mock,
+        ):
+            result = wf._precompute_time_matching([model_a, model_b], [obs_a])
+
+        assigned_to_a = result[model_a]
+        assigned_to_b = result[model_b]
+        assert len(assigned_to_a) + len(assigned_to_b) == 1, (
+            "obs_a must be assigned to exactly one model file"
+        )
+
+    def test_returns_empty_list_for_unmatched_model_file(self, tmp_path):
+        """A model file with no matching obs gets an empty list in the result."""
+        import xarray as xr
+        config = self._make_config(tmp_path)
+
+        model_a = str(tmp_path / 'model_a.nc')
+        xr.Dataset(coords={"time": [pd.Timestamp("2020-01-01T12:00")]}).to_netcdf(model_a)
+
+        obs_b = str(tmp_path / 'obs_b.in')
+        obs_b_mock = self._make_obs_mock(
+            pd.Timestamp("2020-06-01T06:00"), pd.Timestamp("2020-06-01T18:00")
+        )
+
+        wf = WorkflowModelObs(config)
+        wf._base_nml_content = "&model_nml\n/"
+
+        with patch(
+            'model2obs.workflows.workflow_model_obs.obsq.ObsSequence',
+            return_value=obs_b_mock,
+        ):
+            result = wf._precompute_time_matching([model_a], [obs_b])
+
+        assert result[model_a] == []
+
 
 class TestParallelDispatch:
     """Tests for parallel=True dispatch in process_files()."""
@@ -1092,6 +1275,7 @@ class TestParallelDispatch:
         assert mock_process_pair.call_count == 3
 
     @patch.object(WorkflowModelObs, '_process_model_file_worker')
+    @patch.object(WorkflowModelObs, '_precompute_time_matching')
     @patch.object(WorkflowModelObs, '_validate_model_file_timestamps')
     @patch.object(WorkflowModelObs, '_print_workflow_config')
     @patch.object(WorkflowModelObs, '_initialize_model_namelist')
@@ -1099,29 +1283,33 @@ class TestParallelDispatch:
     @patch('model2obs.model_adapter.model_adapter_MOM6.ModelAdapterMOM6.validate_paths')
     def test_parallel_time_matching_dispatches_workers(
         self, mock_validate_paths, mock_get_files, mock_init_nml,
-        mock_print, mock_validate_ts, mock_file_worker, tmp_path
+        mock_print, mock_validate_ts, mock_precompute, mock_file_worker, tmp_path
     ):
-        """Test parallel=True with time_matching dispatches _process_model_file_worker."""
-        import xarray as xr
-
+        """Test parallel=True with time_matching calls _precompute_time_matching then
+        dispatches _process_model_file_worker once per model file with prematched pairs.
+        """
         workflow, config = self._base_workflow(tmp_path)
         workflow._namelist = Mock()
 
-        # Create real model files so the pre-scan can open them
-        model_files = []
-        for i in range(2):
-            path = str(tmp_path / 'model' / f'model_{i}.nc')
-            ds = xr.Dataset(coords={"time": pd.date_range(f"2020-01-0{i+1}", periods=1)})
-            ds.to_netcdf(path)
-            model_files.append(path)
-
+        model_files = ['model_0.nc', 'model_1.nc']
         obs_files = ['obs1.in', 'obs2.in']
         mock_get_files.side_effect = [model_files, obs_files]
-        mock_file_worker.return_value = 0
+        # Pre-match returns one pair per model file
+        mock_precompute.return_value = {
+            'model_0.nc': [(0, 'obs1.in')],
+            'model_1.nc': [(0, 'obs2.in')],
+        }
+        mock_file_worker.return_value = 1
 
         workflow.process_files(no_matching=False, trim_obs=False, parallel=True)
 
+        # Pre-matching must have been called once with the full lists
+        mock_precompute.assert_called_once_with(model_files, obs_files)
+        # One worker per model file
         assert mock_file_worker.call_count == 2
+        # Each worker receives its prematched_pairs keyword argument
+        for call_args in mock_file_worker.call_args_list:
+            assert 'prematched_pairs' in call_args.kwargs
 
     @patch.object(WorkflowModelObs, '_process_model_obs_pair')
     @patch.object(WorkflowModelObs, '_validate_model_file_timestamps')

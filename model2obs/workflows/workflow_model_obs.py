@@ -204,15 +204,20 @@ class WorkflowModelObs(workflow.Workflow):
                         )
             else:
                 if parallel:
-                    # Serial pre-scan: assign base counters so sorted output filenames
-                    # reproduce the input file order regardless of completion order.
+                    # Pre-match obs files to model snapshots in the main thread so
+                    # each worker receives a disjoint, pre-determined set of pairs.
+                    # This prevents multiple workers from independently matching the
+                    # same obs file (the bug that occurs when every worker iterates
+                    # the full obs list with a fresh used_obs_in_files=[]).
+                    prematched = self._precompute_time_matching(model_in_files, obs_in_files)
+
+                    # Base counters are derived from actual matched-pair counts so
+                    # output filenames remain contiguous and ordered by model file.
                     cumulative_total = 0
                     base_counters: Dict[str, int] = {}
                     for model_in_f in model_in_files:
-                        with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
-                            n_snapshots = ds.sizes['time']
                         base_counters[model_in_f] = cumulative_total
-                        cumulative_total += n_snapshots
+                        cumulative_total += len(prematched[model_in_f])
 
                     with concurrent.futures.ThreadPoolExecutor(max_workers=None) as executor:
                         futures = [
@@ -220,6 +225,7 @@ class WorkflowModelObs(workflow.Workflow):
                                 self._process_model_file_worker,
                                 model_in_f, obs_in_files, base_counters[model_in_f],
                                 trim_obs, hull_polygon, hull_points, force_obs_time,
+                                prematched_pairs=prematched[model_in_f],
                             )
                             for model_in_f in model_in_files
                         ]
@@ -380,36 +386,44 @@ class WorkflowModelObs(workflow.Workflow):
         hull_points: Optional[np.ndarray],
         force_obs_time: bool,
         used_obs_in_files: Optional[List[str]] = None,
+        prematched_pairs: Optional[List[Tuple[int, str]]] = None,
     ) -> int:
         """Process all matched pairs for a single model output file.
 
-        This is the single implementation of the per-file time-matching loop,
-        shared by both the serial path (via :meth:`_process_with_time_matching`)
-        and the parallel path.  Each matched pair is processed via
-        :meth:`_process_model_obs_pair` with a counter of
-        ``base_counter + local_match_index``.
+        Supports two operating modes:
+
+        **Pre-matched mode** (parallel path): when *prematched_pairs* is given,
+        the (snapshot index, obs file) assignments have already been determined
+        by :meth:`_precompute_time_matching` in the main thread.  The worker
+        iterates these pairs directly; no time-matching is performed and no
+        shared state is accessed.
+
+        **Time-matching mode** (serial path): when *prematched_pairs* is
+        ``None``, the worker performs the time-window scan itself.  A shared
+        *used_obs_in_files* list prevents the same obs file from being matched
+        by more than one model file.
+
+        Each matched pair is processed via :meth:`_process_model_obs_pair` with
+        a counter of ``base_counter + local_match_index``.
 
         Args:
             model_in_f: Path to the model output file handled by this worker.
-            obs_in_files: Full list of observation input files (read-only).
+            obs_in_files: Full list of observation input files (read-only;
+                only used when *prematched_pairs* is ``None``).
             base_counter: Starting counter value for pairs found in this file.
             trim_obs: Whether to trim observations to model grid boundaries.
             hull_polygon: Model grid boundary polygon (used when *trim_obs*).
             hull_points: Model grid boundary points array (used when *trim_obs*).
             force_obs_time: Whether to use obs time instead of model time.
-            used_obs_in_files: Optional list of already-matched obs file paths.
-                When provided (serial path), obs files present in this list are
-                skipped and newly matched files are appended so the caller's list
-                stays up-to-date across model files.  When ``None`` (parallel
-                path), a fresh local list is used so each worker is independent.
+            used_obs_in_files: Shared list of already-matched obs file paths
+                (serial path only).  Ignored when *prematched_pairs* is given.
+            prematched_pairs: Pre-assigned ``(snapshot_index, obs_file_path)``
+                tuples from :meth:`_precompute_time_matching` (parallel path).
+                When provided, *used_obs_in_files* is ignored.
 
         Returns:
             Number of model-obs pairs processed for this model file.
         """
-        local_match_index = 0
-        if used_obs_in_files is None:
-            used_obs_in_files = []
-
         print(f"    Processing model file {model_in_f}...")
 
         with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
@@ -417,6 +431,43 @@ class WorkflowModelObs(workflow.Workflow):
             snapshots_nb = ds.sizes[time_var]
             print(f"      model has {snapshots_nb} snapshots.")
 
+            if prematched_pairs is not None:
+                # ---- Parallel path: pairs pre-assigned; no time-matching needed ----
+                for local_match_index, (t_id, obs_in_file) in enumerate(prematched_pairs):
+                    print(f"      processing pre-matched snapshot {t_id} "
+                          f"with obs_seq {os.path.basename(obs_in_file)}...")
+                    counter = base_counter + local_match_index
+                    tmp_model_in_file = os.path.join(
+                        self.config['tmp_folder'],
+                        os.path.basename(model_in_f) + "_tmp_" + str(t_id),
+                    )
+                    if snapshots_nb > 1:
+                        model_time_varname = self.model_adapter.time_varname
+                        ncks = [
+                            "ncks", "-d", f"{model_time_varname},{t_id}",
+                            model_in_f, tmp_model_in_file,
+                        ]
+                        print(f"        Calling {' '.join(ncks)}")
+                        subprocess.run(ncks, check=True)
+                    else:
+                        tmp_model_in_file = model_in_f
+
+                    self._process_model_obs_pair(
+                        tmp_model_in_file, obs_in_file, trim_obs, counter,
+                        hull_polygon, hull_points, force_obs_time,
+                        original_model_file=model_in_f,
+                    )
+
+                    if snapshots_nb > 1:
+                        os.remove(tmp_model_in_file)
+
+                return len(prematched_pairs)
+
+            # ---- Serial path: perform time-matching on the fly ----
+            if used_obs_in_files is None:
+                used_obs_in_files = []
+
+            local_match_index = 0
             for t_id, time in enumerate(ds[time_var].values):
                 print(f"      processing snapshot {t_id+1} of {snapshots_nb}...")
                 for obs_in_file in obs_in_files:
@@ -474,6 +525,62 @@ class WorkflowModelObs(workflow.Workflow):
                         break
 
         return local_match_index
+
+    def _precompute_time_matching(
+        self,
+        model_in_files: List[str],
+        obs_in_files: List[str],
+    ) -> Dict[str, List[Tuple[int, str]]]:
+        """Assign obs files to model snapshots before parallel workers are launched.
+
+        Runs the same serial time-window logic as :meth:`_process_model_file_worker`
+        but without processing any pairs.  Each obs file is assigned to at most one
+        (model file, snapshot) pair; once assigned it is excluded from subsequent
+        model files.
+
+        This must be called in the main thread before spawning workers so that
+        every worker receives a disjoint, pre-determined set of (snapshot, obs)
+        assignments and no two workers can claim the same obs file.
+
+        Args:
+            model_in_files: Ordered list of model output file paths.
+            obs_in_files: Full list of obs sequence input file paths.
+
+        Returns:
+            A dict mapping each model file path to a list of
+            ``(snapshot_index, obs_file_path)`` tuples in match order.
+        """
+        print("  Pre-matching obs files to model snapshots...")
+        used_obs: List[str] = []
+        result: Dict[str, List[Tuple[int, str]]] = {f: [] for f in model_in_files}
+
+        for model_in_f in model_in_files:
+            with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
+                for t_id, time in enumerate(ds["time"].values):
+                    tw = timedelta(
+                        days=self.config["time_window"]["days"],
+                        seconds=self.config["time_window"]["seconds"],
+                    )
+                    half_tw = tw / 2
+                    ts = pd.Timestamp(time)
+                    ts1 = ts - half_tw
+                    ts2 = ts + half_tw
+
+                    for obs_file in obs_in_files:
+                        if obs_file in used_obs:
+                            continue
+                        obs_df = obsq.ObsSequence(obs_file)
+                        t1 = obs_df.df.time.min()
+                        t2 = obs_df.df.time.max()
+                        if (ts1 <= t1 <= ts2) and (ts1 <= t2 <= ts2):
+                            used_obs.append(obs_file)
+                            result[model_in_f].append((t_id, obs_file))
+                            break
+
+        total = sum(len(v) for v in result.values())
+        print(f"  Pre-matching complete: {total} pair(s) assigned across "
+              f"{len(model_in_files)} model file(s).")
+        return result
 
     def _process_with_time_matching(self, model_in_files: List[str], obs_in_files: List[str],
                                   trim_obs: bool, hull_polygon: Optional[Any],
