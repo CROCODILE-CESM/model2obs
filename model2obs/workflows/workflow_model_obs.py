@@ -720,6 +720,9 @@ class WorkflowModelObs(workflow.Workflow):
         If writing fails for any reason (e.g. disk full, permission error), a
         warning is printed and the workflow continues unaffected.
 
+        The time window used to match this obs_seq file to the model snapshot is
+        derived from ``self.config["time_window"]`` and the model snapshot time.
+
         Args:
             file_number: Zero-padded 4-digit pair counter string, e.g. ``'0003'``.
             model_in_file: Path to the model file submitted to DART (may be a
@@ -755,6 +758,15 @@ class WorkflowModelObs(workflow.Workflow):
             time_used = _DART_EPOCH + timedelta(days=log_time_days, seconds=log_time_seconds)
             time_used_str = time_used.isoformat(sep="T", timespec="seconds")
 
+            tw = timedelta(
+                days=self.config["time_window"]["days"],
+                seconds=self.config["time_window"]["seconds"],
+            )
+            half_tw = tw / 2
+            ts = pd.Timestamp(time_used)
+            window_start = (ts - half_tw).isoformat(sep="T", timespec="seconds")
+            window_end   = (ts + half_tw).isoformat(sep="T", timespec="seconds")
+
             lines = [
                 "=== Model-Observation Pair Summary ===",
                 _line("Pair number", file_number),
@@ -764,6 +776,9 @@ class WorkflowModelObs(workflow.Workflow):
             if original_model_file and original_model_file != model_in_file:
                 lines.append(_line("Original NC file", original_model_file))
             lines.append(_line("Time used", f"{time_used_str}  (from {time_source})"))
+            lines.append(_line("Time window", str(tw)))
+            lines.append(_line("Window start", window_start))
+            lines.append(_line("Window end",   window_end))
 
             lines.append("---------- Observation input ----------")
             lines.append(_line("obs_seq.in file", obs_in_file_nml))

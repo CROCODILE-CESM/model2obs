@@ -683,6 +683,7 @@ class TestWritePairSummaryLog:
             'ocean_geometry': 'ocean.nc',
             'perfect_model_obs_dir': str(tmp_path),
             'parquet_folder': str(tmp_path),
+            'time_window': {'days': 1, 'seconds': 0},
         })
 
     def _common_kwargs(self, tmp_path):
@@ -742,6 +743,24 @@ class TestWritePairSummaryLog:
         content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
         assert "Time used" in content
         assert "(from model file)" in content
+
+    def test_log_contains_time_window(self, tmp_path):
+        """Log records the time window and its start/end bounds.
+
+        With time_window={'days': 1, 'seconds': 0} and log_time_days=152685
+        (2019-01-15T12:00:00), the half-window is 12 h, so:
+          window start = 2019-01-15T00:00:00
+          window end   = 2019-01-16T00:00:00
+        """
+        wf = self._make_workflow(tmp_path)
+        wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
+        content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
+        assert "Time window" in content
+        assert "Window start" in content
+        assert "Window end" in content
+        assert "1 day" in content            # timedelta(days=1) string representation
+        assert "2019-01-15T00:00:00" in content  # window start
+        assert "2019-01-16T00:00:00" in content  # window end
 
     def test_log_contains_obs_counts(self, tmp_path):
         """Log records both submitted count and original pre-trim count."""
