@@ -197,11 +197,19 @@ def _compare_obs_seq_files(serial_output_folder: str, parallel_output_folder: st
         if s_df.equals(p_df):
             print(f"  obs_seq_{ctr}.out  MATCH  ({n_serial} rows)")
         else:
-            n_diff = (s_df != p_df).any(axis=1).sum() if s_df.shape == p_df.shape else abs(n_serial - n_parallel)
+            if s_df.shape == p_df.shape:
+                n_diff = int((s_df != p_df).any(axis=1).sum())
+                diff_label = f"~{n_diff} differing rows"
+            else:
+                n_diff = abs(n_serial - n_parallel)
+                diff_label = (
+                    f"row count differs by {n_diff} "
+                    f"— full content comparison skipped; see Diagnostic 3"
+                )
             print(
                 f"  obs_seq_{ctr}.out  MISMATCH  "
                 f"(serial={n_serial} rows, parallel={n_parallel} rows, "
-                f"~{n_diff} differing rows)"
+                f"{diff_label})"
             )
             mismatch_count += 1
 
@@ -237,7 +245,11 @@ def _compare_model_inputs(serial_config: dict, parallel_config: dict) -> None:
         return
 
     print(f"  Serial:   {len(serial_files)} file(s) in {serial_folder}")
+    for f in serial_files:
+        print(f"    - {f.name}")
     print(f"  Parallel: {len(parallel_files)} file(s) in {parallel_folder}")
+    for f in parallel_files:
+        print(f"    - {f.name}")
 
     try:
         ds_serial = xr.open_mfdataset(
@@ -280,7 +292,8 @@ def _report_diff_statistics(serial_df: pd.DataFrame, parallel_df: pd.DataFrame) 
     """Print statistics about rows that differ between the two parquet tables.
 
     Performs an outer-join on ``(time, latitude, longitude, vertical, type)``
-    and reports mismatching rows grouped by observation type, day, and QC code.
+    and reports mismatching rows grouped by observation type, day, and QC code,
+    broken down by source (serial-only / parallel-only / value-mismatch).
 
     Note: the parquet output does not include a thread-number column, so
     per-thread attribution is not possible from the parquet alone.
@@ -290,6 +303,15 @@ def _report_diff_statistics(serial_df: pd.DataFrame, parallel_df: pd.DataFrame) 
         parallel_df: Sorted parquet DataFrame from the parallel workflow.
     """
     print("\n=== DIAGNOSTIC 3: Failure statistics ===")
+    print(
+        "  Note: Diagnostic 1 reports the row-count difference between matching\n"
+        "  obs_seq files (e.g. |2527-2534| = 7).  Diagnostic 3 outer-joins on\n"
+        "  (time, latitude, longitude, vertical, type); it may show much larger\n"
+        "  numbers when the model time stored in the parquet differs between\n"
+        "  workflows for the same observations (e.g. if obs_seq_0003 was matched\n"
+        "  to a different model snapshot in serial vs. parallel)."
+    )
+
     join_keys = [c for c in _SORT_COLS if c in serial_df.columns and c in parallel_df.columns]
 
     merged = pd.merge(
@@ -305,14 +327,11 @@ def _report_diff_statistics(serial_df: pd.DataFrame, parallel_df: pd.DataFrame) 
     only_parallel = merged[merged["_merge"] == "right_only"]
     both = merged[merged["_merge"] == "both"]
 
-    # Rows present in only one workflow
-    if len(only_serial) > 0:
-        print(f"  Rows ONLY in serial output:   {len(only_serial)}")
-    if len(only_parallel) > 0:
-        print(f"  Rows ONLY in parallel output: {len(only_parallel)}")
+    # Always print both counts so the reader can see 0 explicitly
+    print(f"\n  Rows ONLY in serial output:   {len(only_serial)}")
+    print(f"  Rows ONLY in parallel output: {len(only_parallel)}")
 
     # For rows present in both, find value differences in key numeric columns
-    value_cols = [c for c in ["interpolated_model_serial", "obs_serial"] if c in both.columns]
     counterparts = {
         "interpolated_model_serial": "interpolated_model_parallel",
         "obs_serial": "obs_parallel",
@@ -325,34 +344,99 @@ def _report_diff_statistics(serial_df: pd.DataFrame, parallel_df: pd.DataFrame) 
     value_diffs = both[diff_mask]
     print(f"  Rows present in both but with different values: {len(value_diffs)}")
 
-    all_diff = pd.concat([only_serial, only_parallel, value_diffs], ignore_index=True)
-    if all_diff.empty:
+    if only_serial.empty and only_parallel.empty and value_diffs.empty:
         print("  (No differing rows found via outer-join — difference may be in row count or dtypes.)")
         return
 
-    # Resolve type column (may be from join key or suffixed)
-    type_col = "type" if "type" in all_diff.columns else None
+    # Helper: count a column per group for each of the three row sources
+    def _breakdown(col: str, label: str) -> None:
+        sources = [
+            ("serial-only",   only_serial,  col if col in only_serial.columns   else col + "_serial"),
+            ("parallel-only", only_parallel, col if col in only_parallel.columns else col + "_parallel"),
+            ("value-mismatch", value_diffs,  col if col in value_diffs.columns   else col + "_serial"),
+        ]
+        # Collect all unique values across sources
+        all_vals: set = set()
+        for _, df_src, resolved_col in sources:
+            if not df_src.empty and resolved_col in df_src.columns:
+                all_vals.update(df_src[resolved_col].dropna().unique())
+        if not all_vals:
+            return
+        all_vals_sorted = sorted(all_vals, key=str)
 
-    if type_col:
-        print("\n  Differing rows by observation type:")
-        for obs_type, cnt in all_diff[type_col].value_counts().items():
-            print(f"    {obs_type}: {cnt} rows")
+        print(f"\n  Differing rows by {label}:")
+        col_w = max(len(str(v)) for v in all_vals_sorted)
+        header = f"    {'':>{col_w}}  {'serial-only':>12}  {'parallel-only':>13}  {'value-mismatch':>14}"
+        print(header)
+        for val in all_vals_sorted:
+            counts = []
+            for _, df_src, resolved_col in sources:
+                if not df_src.empty and resolved_col in df_src.columns:
+                    counts.append(int((df_src[resolved_col] == val).sum()))
+                else:
+                    counts.append(0)
+            print(f"    {str(val):>{col_w}}  {counts[0]:>12}  {counts[1]:>13}  {counts[2]:>14}")
+
+    # Observation type breakdown
+    if "type" in merged.columns:
+        _breakdown("type", "observation type")
 
     # Day-level breakdown
-    time_col = "time" if "time" in all_diff.columns else None
-    if time_col:
-        days = pd.to_datetime(all_diff[time_col]).dt.date
-        print("\n  Differing rows by day:")
-        for day, cnt in days.value_counts().sort_index().items():
-            print(f"    {day}: {cnt} rows")
+    if "time" in merged.columns:
+        for df_part in [only_serial, only_parallel, value_diffs]:
+            if not df_part.empty and "time" in df_part.columns:
+                df_part = df_part.copy()
+                df_part["_day"] = pd.to_datetime(df_part["time"]).dt.date
+        # Rebuild sources with _day column
+        def _add_day(df: pd.DataFrame) -> pd.DataFrame:
+            if df.empty or "time" not in df.columns:
+                return df
+            out = df.copy()
+            out["_day"] = pd.to_datetime(out["time"]).dt.date
+            return out
 
-    # QC breakdown (check both suffixed variants)
-    for qc_col in ["interpolated_model_QC_serial", "interpolated_model_QC_parallel", "interpolated_model_QC"]:
-        if qc_col in all_diff.columns:
-            print(f"\n  QC code distribution in differing rows ({qc_col}):")
-            for code, cnt in all_diff[qc_col].value_counts().sort_index().items():
-                print(f"    {code}: {cnt} rows")
-            break
+        only_serial_day   = _add_day(only_serial)
+        only_parallel_day = _add_day(only_parallel)
+        value_diffs_day   = _add_day(value_diffs)
+
+        all_days: set = set()
+        for df_src in [only_serial_day, only_parallel_day, value_diffs_day]:
+            if not df_src.empty and "_day" in df_src.columns:
+                all_days.update(df_src["_day"].dropna().unique())
+
+        if all_days:
+            all_days_sorted = sorted(all_days)
+            print("\n  Differing rows by day:")
+            print(f"    {'':>12}  {'serial-only':>12}  {'parallel-only':>13}  {'value-mismatch':>14}")
+            for day in all_days_sorted:
+                counts = []
+                for df_src in [only_serial_day, only_parallel_day, value_diffs_day]:
+                    if not df_src.empty and "_day" in df_src.columns:
+                        counts.append(int((df_src["_day"] == day).sum()))
+                    else:
+                        counts.append(0)
+                print(f"    {str(day):>12}  {counts[0]:>12}  {counts[1]:>13}  {counts[2]:>14}")
+
+    # QC breakdown — separate table per source
+    def _qc_table(df_src: pd.DataFrame, source_label: str, preferred_cols: list) -> None:
+        if df_src.empty:
+            return
+        qc_col = next((c for c in preferred_cols if c in df_src.columns), None)
+        if qc_col is None:
+            return
+        vc = df_src[qc_col].dropna().value_counts().sort_index()
+        if vc.empty:
+            return
+        print(f"\n  QC code distribution — {source_label}:")
+        for code, cnt in vc.items():
+            print(f"    {code}: {cnt} rows")
+
+    _qc_table(only_serial,  "serial-only rows",
+              ["interpolated_model_QC_serial",   "interpolated_model_QC"])
+    _qc_table(only_parallel, "parallel-only rows",
+              ["interpolated_model_QC_parallel", "interpolated_model_QC"])
+    _qc_table(value_diffs,   "value-mismatch rows (serial QC)",
+              ["interpolated_model_QC_serial",   "interpolated_model_QC"])
 
     print(
         "\n  NOTE: The parquet output does not include a thread-number column,\n"
