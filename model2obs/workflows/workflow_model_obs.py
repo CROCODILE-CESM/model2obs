@@ -89,11 +89,15 @@ class WorkflowModelObs(workflow.Workflow):
                 self.config['parquet_folder'],
                 self.config['input_nml_bck'],
                 self.config['trimmed_obs_folder'],
-                self.config['output_folder']
+                self.config['output_folder'],
             ]
             for folder in output_folders:
                 print("  Clearing folder:", folder)
                 config_utils.clear_folder(folder)
+            tmp_folder = self.config['tmp_folder']
+            print("  Clearing folder:", tmp_folder)
+            shutil.rmtree(tmp_folder, ignore_errors=True)
+            os.makedirs(tmp_folder, exist_ok=True)
             print("  All output folders cleared.")
             print()
         

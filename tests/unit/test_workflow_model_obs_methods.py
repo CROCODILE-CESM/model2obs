@@ -86,20 +86,28 @@ class TestGetRequiredConfigKeys:
 class TestRunMethod:
     """Tests for run() method."""
     
+    @patch('model2obs.workflows.workflow_model_obs.shutil.rmtree')
     @patch('model2obs.workflows.workflow_model_obs.config_utils.clear_folder')
     @patch.object(WorkflowModelObs, 'merge_model_obs_to_parquet')
     @patch.object(WorkflowModelObs, 'process_files')
-    def test_run_with_clear_output(self, mock_process, mock_merge, mock_clear, base_config, tmp_path, capsys):
-        """Test run() clears output folders when clear_output=True."""
+    def test_run_with_clear_output(self, mock_process, mock_merge, mock_clear, mock_rmtree,
+                                   base_config, tmp_path, capsys):
+        """Test run() clears output folders when clear_output=True.
+
+        The four standard folders are cleared via clear_folder(); tmp_folder is
+        wiped via shutil.rmtree so that leftover worker subdirectories are removed.
+        """
         base_config['input_nml_bck'] = str(tmp_path / 'bck')
         base_config['trimmed_obs_folder'] = str(tmp_path / 'trimmed')
-        
+        base_config['tmp_folder'] = str(tmp_path / 'tmp')
+
         workflow = WorkflowModelObs(base_config)
         mock_process.return_value = 5
-        
+
         workflow.run(clear_output=True, trim_obs=False)
-        
+
         assert mock_clear.call_count == 4
+        mock_rmtree.assert_called_once_with(base_config['tmp_folder'], ignore_errors=True)
         captured = capsys.readouterr()
         assert "Clearing all output folders" in captured.out
     
