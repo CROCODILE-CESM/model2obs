@@ -14,6 +14,7 @@ import pandas as pd
 from datetime import timedelta
 
 from model2obs.workflows.workflow_model_obs import WorkflowModelObs, RunOptions
+from model2obs.model_adapter.model_adapter_MOM6 import ModelAdapterMOM6
 
 
 @pytest.fixture
@@ -457,7 +458,7 @@ class TestProcessModelObsPair:
 
     @patch('subprocess.Popen')
     @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist.from_content')
-    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
+    @patch.object(ModelAdapterMOM6, 'get_model_time_in_days_seconds', return_value=(100, 0))
     @patch('model2obs.workflows.workflow_model_obs.obs_seq_tools.trim_obs_seq_in')
     def test_process_model_obs_pair_with_trimming(self, mock_trim, mock_get_time,
                                                   mock_from_content, mock_popen,
@@ -530,7 +531,7 @@ class TestProcessModelObsPair:
 
     @patch('subprocess.Popen')
     @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist.from_content')
-    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
+    @patch.object(ModelAdapterMOM6, 'get_model_time_in_days_seconds', return_value=(100, 0))
     def test_process_model_obs_pair_subprocess_error(self, mock_get_time, mock_from_content,
                                                      mock_popen, tmp_path):
         """Test _process_model_obs_pair raises RuntimeError on subprocess failure."""
@@ -560,7 +561,7 @@ class TestProcessModelObsPair:
 
     @patch('subprocess.Popen')
     @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist.from_content')
-    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
+    @patch.object(ModelAdapterMOM6, 'get_model_time_in_days_seconds', return_value=(100, 0))
     def test_process_model_obs_pair_tmpdir_cleaned_on_success(self, mock_get_time,
                                                               mock_from_content,
                                                               mock_popen, tmp_path):
@@ -597,7 +598,7 @@ class TestProcessModelObsPair:
 
     @patch('subprocess.Popen')
     @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist.from_content')
-    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
+    @patch.object(ModelAdapterMOM6, 'get_model_time_in_days_seconds', return_value=(100, 0))
     def test_process_model_obs_pair_tmpdir_cleaned_on_failure(self, mock_get_time,
                                                               mock_from_content,
                                                               mock_popen, tmp_path):
@@ -635,7 +636,7 @@ class TestProcessModelObsPair:
 
     @patch('subprocess.Popen')
     @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist.from_content')
-    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds')
+    @patch.object(ModelAdapterMOM6, 'get_model_time_in_days_seconds', return_value=(100, 0))
     def test_process_model_obs_pair_per_pair_log(self, mock_get_time, mock_from_content,
                                                  mock_popen, tmp_path):
         """Test that each pair writes to its own numbered log file.
@@ -1254,8 +1255,7 @@ class TestParallelDispatch:
     @patch.object(WorkflowModelObs, '_validate_model_file_timestamps')
     @patch.object(WorkflowModelObs, '_print_workflow_config')
     @patch.object(WorkflowModelObs, '_initialize_model_namelist')
-    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds',
-           return_value=(100, 0))
+    @patch.object(ModelAdapterMOM6, 'get_model_time_in_days_seconds', return_value=(100, 0))
     @patch('model2obs.workflows.workflow_model_obs.file_utils.get_sorted_files')
     @patch('model2obs.model_adapter.model_adapter_MOM6.ModelAdapterMOM6.validate_paths')
     def test_parallel_no_matching_dispatches_all_pairs(
@@ -1315,8 +1315,7 @@ class TestParallelDispatch:
     @patch.object(WorkflowModelObs, '_validate_model_file_timestamps')
     @patch.object(WorkflowModelObs, '_print_workflow_config')
     @patch.object(WorkflowModelObs, '_initialize_model_namelist')
-    @patch('model2obs.workflows.workflow_model_obs.file_utils.get_model_time_in_days_seconds',
-           return_value=(100, 0))
+    @patch.object(ModelAdapterMOM6, 'get_model_time_in_days_seconds', return_value=(100, 0))
     @patch('model2obs.workflows.workflow_model_obs.file_utils.get_sorted_files')
     @patch('model2obs.model_adapter.model_adapter_MOM6.ModelAdapterMOM6.validate_paths')
     def test_parallel_worker_exception_propagates(

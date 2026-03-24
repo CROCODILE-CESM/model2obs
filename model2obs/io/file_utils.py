@@ -39,17 +39,6 @@ def timestamp_to_days_seconds(timestamp: np.datetime64) -> Tuple[int, int]:
     return days, seconds_in_day
 
 
-def get_model_time_in_days_seconds(model_in_file: str, time_var: str) -> Tuple[int, int]:
-    """Get model time in days and seconds from model input file."""
-
-    with self.model_adapter.open_dataset_ctx(model_in_f) as model_ds:
-        model_time = model_ds[time_var].values
-    model_time = np.atleast_1d(model_time)
-    if len(model_time) > 1:
-        raise ValueError(f"Model input file {model_in_file} contains multiple time steps, expected single time step.")
-    return timestamp_to_days_seconds(model_time[0])
-
-
 def get_obs_time_in_days_seconds(obs_in_file: str) -> Tuple[int, int]:
     """Get obs_seq.in time in days and seconds from obs input file."""
     import pydartdiags.obs_sequence.obs_sequence as obsq
