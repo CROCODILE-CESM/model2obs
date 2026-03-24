@@ -25,6 +25,8 @@ class ModelAdapterROMSRutgers(ModelAdapter):
 
         # Assign ocean model name
         self.ocean_model = "ROMS_Rutgers"
+        # Toggle ocean model output
+        self.is_ocean = True
         # Assign time_varname_name
         self.time_varname = "ocean_time"
         return
