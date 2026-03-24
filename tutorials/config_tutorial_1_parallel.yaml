@@ -15,7 +15,7 @@ ocean_model: MOM6
 
 ####### INPUT FILES #######
 # Directory containing model .nc files to process
-model_files_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6/
+model_files_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6_par/
 
 # Model configuration files (must be .nc files)
 template_file: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6/NWA12_demo_01.nc
@@ -27,11 +27,11 @@ obs_seq_in_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_CrocoLake/
 
 ####### OUTPUT FILES #######
 # Output directories for processed files (will be created if it doesn't exist)
-output_folder: $TUTORIAL_DATA_PATH/output/tutorial_1/out_obs_seq_in/
-input_nml_bck: $TUTORIAL_DATA_PATH/output/tutorial_1/input_bckp/
-trimmed_obs_folder: $TUTORIAL_DATA_PATH/output/tutorial_1/out_trimmed_obs_seq_in/
-parquet_folder: $TUTORIAL_DATA_PATH/output/tutorial_1/out_parquet/
-tmp_folder: $TUTORIAL_DATA_PATH/output/tutorial_1/tmp/
+output_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/out_obs_seq_in/
+input_nml_bck: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/input_bckp/
+trimmed_obs_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/out_trimmed_obs_seq_in/
+parquet_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/out_parquet/
+tmp_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/tmp/
 
 ####### DART #######
 # Path to DART's perfect model obs executable

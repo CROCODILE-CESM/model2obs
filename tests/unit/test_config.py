@@ -558,8 +558,9 @@ class TestClearFolder:
     
     Tests cover:
     - Files in folder are deleted
+    - Subdirectories are also deleted (full clear, not files-only)
     - Non-existent folder is handled gracefully
-    - Subdirectories are preserved (only files deleted)
+    - The folder itself is preserved (recreated empty)
     """
     
     def test_clear_folder_deletes_files(self, create_mock_directory_structure):
@@ -567,7 +568,7 @@ class TestClearFolder:
         
         Given: A directory containing multiple files
         When: clear_folder() is called
-        Then: All files are deleted, directory remains
+        Then: All files are deleted, directory remains empty
         """
         dir_path = create_mock_directory_structure(
             "test_folder",
@@ -579,7 +580,7 @@ class TestClearFolder:
         
         assert dir_path.exists()  # Directory still exists
         assert len(list(dir_path.iterdir())) == 0  # But is now empty
-    
+
     def test_clear_folder_nonexistent_directory(self, tmp_path: Path):
         """Test clear_folder handles non-existent directory gracefully.
         

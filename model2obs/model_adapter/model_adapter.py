@@ -10,9 +10,11 @@ from contextlib import contextmanager
 from collections.abc import Iterator
 
 import dask.dataframe as dd
+import numpy as np
 import xarray as xr
 
 from ..utils import config as config_utils
+from ..io import file_utils
 
 from dataclasses import dataclass
 
@@ -148,6 +150,17 @@ class ModelAdapter(ABC):
         ds = ds.rename({self.time_varname: "time"})
 
         return ds
+
+    def get_model_time_in_days_seconds(self, model_in_f: str) -> Tuple[int, int]:
+        """Get model time in days and seconds from model input file."""
+
+        with self.open_dataset_ctx(model_in_f) as ds:
+            model_time = ds[self.time_varname].values
+        model_time = np.atleast_1d(model_time)
+        if len(model_time) > 1:
+            raise ValueError(f"Model input file {model_in_f} contains multiple time steps, expected single time step.")
+        return file_utils.timestamp_to_days_seconds(model_time[0])
+
 
     @abstractmethod
     def convert_units(self) -> dd.Series:

@@ -131,7 +131,7 @@ def main():
 
     # Download the dataset
     print(f"Downloading tutorials data...")
-    zenodo_id = 17524900
+    zenodo_id = 19204393
     filenames = download_zenodo_record(zenodo_id, destination)
 
     # Unzip the dataset

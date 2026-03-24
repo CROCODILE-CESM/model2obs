@@ -346,6 +346,84 @@ perfect-model-obs -c config.yaml --no-matching
 perfect-model-obs -c config.yaml --parquet-only
 ```
 
+### Tests
+
+#### Run main tests
+
+To test your installation of model2obs, run:
+
+```bash
+pytest tests/
+```
+
+Note that this executes all tests except the thorough sanity test that compares
+the parquet output of the serial and parallel workflows when these are called on
+the same real model output (stored as one file for the serial workflow and two
+files for the parallel workflow). The thorough test is exclude from the regular
+tests because it is both time and resource consuming (it requires an HPC setup)
+and depends on the tutorial data (which are 60+ GB unzipped). The equivalence
+between the two workflows is also tested by `pytest tests/` but not on real
+data: while that should be enough, the thorough test is provided in case
+something goes south at some point in the development and/or if there is the
+suspicion that the general tests are not testing the workflows properly.
+
+#### Run the extra test
+
+The end-to-end thorough sanity test verifies that serial and parallel workflow runs
+produce identical parquet output.  
+
+**Prerequisites:**
+
+1. Set the required environment variables:
+   ```bash
+   export TUTORIAL_DATA_PATH=/path/to/tutorial/data
+   export DART_ROOT_PATH=/path/to/DART
+   ```
+
+2. Download the tutorial datasets (if not already present):
+   ```bash
+   download_tutorials_data --destination $TUTORIAL_DATA_PATH
+   ```
+
+3. Ensure DART is compiled for MOM6 (`$DART_ROOT_PATH/models/MOM6/work/perfect_model_obs` must exist).
+
+**Run the sanity test:**
+
+```bash
+# Recommended: show live workflow output as the test runs
+pytest tests/sanity/ -s -v
+
+# Minimal output (just pass/fail)
+pytest tests/sanity/
+```
+
+The `-s` flag disables output capture so workflow progress prints to the terminal;
+`-v` shows the full test name and result.
+
+The test runs the serial workflow from `tutorials/config_tutorial_1.yaml` and the
+parallel workflow from `tutorials/config_tutorial_1_parallel.yaml`, then asserts
+that every row in both parquet outputs is identical (order-independent).
+
+**Failure diagnostics:**
+
+If the parity assertion fails, three diagnostic steps run automatically and print
+structured information to stdout (visible when using `-s`):
+
+1. **obs_seq.out comparison** – Each `obs_seq_NNNN.out` file is loaded and compared
+   pair-by-pair.  Results are reported as `MATCH`, `MISMATCH (N rows differ)`,
+   `EXTRA` (only in one workflow), or `MISSING`.
+
+2. **Model input equivalence** – The serial single-file `in_mom6/` dataset is
+   compared with the concatenated `in_mom6_par/` multi-file dataset using xarray.
+   Any differing variables are listed.
+
+3. **Failure statistics** – Rows that differ between the two parquet tables are
+   summarised by observation type, day, and QC code.
+
+> **Note:** The parquet output does not record a thread-number column, so
+> per-thread attribution of differing rows is not available from the parquet alone.
+> Per-file logs in the parallel `output_folder` provide additional context.
+
 ## How to Cite
 
 If you use model2obs in your research, please cite it as:

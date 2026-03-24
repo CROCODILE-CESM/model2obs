@@ -93,15 +93,13 @@ class TestNamelistEdgeCases:
         """Test symlink_to_namelist raises ValueError when source equals dest."""
         nml_path = tmp_path / "test.nml"
         nml_path.write_text("&test\n/")
-        
-        def mock_getcwd():
-            return str(nml_path.parent)
-        
-        monkeypatch.setattr(os, "getcwd", mock_getcwd)
-        monkeypatch.setattr(os.path, "join", lambda *args: str(nml_path))
-        
+
+        monkeypatch.chdir(tmp_path)
         nml = Namelist(str(nml_path))
-        
+
+        # Force symlink_dest to equal the namelist path to trigger the same-path check
+        nml.symlink_dest = str(nml_path)
+
         with pytest.raises(ValueError, match="Source and destination.*are the same"):
             nml.symlink_to_namelist()
     
