@@ -215,20 +215,26 @@ def parse_obs_def_ocean_mod(rst_file_path: str) -> Tuple[Dict[str, str], Dict[st
 
     return obs_type_to_qty, qty_to_obs_types
 
-def validate_and_expand_obs_types(obs_types_list: List[str], rst_file_path: str) -> List[str]:
+def validate_and_expand_obs_types(
+        obs_types_list: List[str],
+        obs_types_dicts: Tuple[Dict[str, str], Dict[str, List[str]]]
+) -> List[str]:
     """Validate and expand observation types list.
 
     Args:
         obs_types_list: List of observation types from config, may include ALL_<FIELD> entries
-        rst_file_path: Path to the obs_def_ocean_mod.rst file
+        obs_types_dicts: Tuple containing dictionaries to map obs types to QTY and
+                         vice versa (as returned, e.g., by parse_obs_def_ocean_mod)
 
     Returns:
         Expanded list of valid observation types
 
     Raises:
         ValueError: If any observation type is invalid or expansion fails
+
     """
-    obs_type_to_qty, qty_to_obs_types = parse_obs_def_ocean_mod(rst_file_path)
+    obs_type_to_qty = obs_types_dicts[0]
+    qty_to_obs_types = obs_types_dicts[1] 
 
     expanded_types = set()
 

@@ -23,6 +23,7 @@ class ModelAdapterCapabilities:
     supports_trim_obs: bool = True
     supports_no_matching: bool = True
     supports_force_obs_time: bool = True
+    is_ocean: bool = False
 
 
 class ModelAdapter(ABC):
@@ -41,6 +42,7 @@ class ModelAdapter(ABC):
         method to set:
         - self.ocean_model: Name of the ocean model (str)
         - self.time_varname: Name of the time variable in model files (str)
+        - self.is_ocean: Toggle for ocean model output (bool)
         """
         pass  # Subclasses must implement
 
@@ -172,5 +174,13 @@ class ModelAdapter(ABC):
         """
     
         return False
+
+    def parse_dart_obs_type(self, rst_file_path: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
+        """Select parser depending on model (currently ocean only)"""
+
+        if self.is_ocean:
+            return config_utils.parse_obs_def_ocean_mod(rst_file_path)
+
+        raise NotImplementedError("Only ocean models are currently supported")
 
 

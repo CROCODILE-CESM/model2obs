@@ -345,8 +345,9 @@ class WorkflowModelObs(workflow.Workflow):
                 '../../../observations/forward_operators/obs_def_ocean_mod.rst'
             )
             try:
+                obs_types_tuple = self.model_adapter.parse_dart_obs_type(rst_file_path)
                 expanded_obs_types = config_utils.validate_and_expand_obs_types(
-                    self.config['use_these_obs'], rst_file_path
+                    self.config['use_these_obs'], obs_types_tuple
                 )
                 print(f"    Target observation types: {expanded_obs_types}")
                 if not expanded_obs_types:

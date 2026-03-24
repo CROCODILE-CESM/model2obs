@@ -24,6 +24,8 @@ class ModelAdapterMOM6(ModelAdapter):
 
         # Assign ocean model name
         self.ocean_model = "MOM6"
+        # Toggle ocean model output
+        self.is_ocean = True
         # Assign time_variable_name
         self.time_varname = "time"
         return
