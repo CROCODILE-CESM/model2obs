@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-03-24
+- Add supports for parallel processing of model output files
+- Add tutorial 1 parallel version
+- Update zenodo link to new tutorial data
+- Fix bug where utility method to convert model time to (days, seconds) was reading wrong calendar for MOM6 model output
+- Fix some install paths that were not automated
+- Add log file per model-obs files processing pair
+
 ## [0.4.0] - 2026-03-16
 - CrocoCamp is renamed to model2obs
 - Tests for interactive widgets are added
