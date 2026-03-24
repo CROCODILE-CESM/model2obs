@@ -46,7 +46,7 @@ use_these_obs:
 
 # Time window for matching observations to model output
 time_window:
-  days: 999      # Primary time window in days
+  days: 1      # Primary time window in days
   hours: 0     # Additional hours
   minutes: 0   # Additional minutes
   seconds: 0   # Additional seconds
