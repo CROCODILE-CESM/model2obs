@@ -820,18 +820,21 @@ class TestValidateAndExpandObsTypes:
                 (obs_type_to_qty, qty_to_obs_types)
             )
     
-    def test_validate_and_expand_obs_types_invalid_all(self, fixtures_root: Path):
+    def test_validate_and_expand_obs_types_invalid_all(self):
         """Test validate_and_expand_obs_types raises error for invalid ALL_ pattern.
-        
-        Given: A list containing 'ALL_<NONEXISTENT_FIELD>'
+
+        Given: A list containing 'ALL_DENSITY' and dicts that have no QTY_DENSITY entry
         When: validate_and_expand_obs_types() is called
         Then: ValueError is raised indicating no types found for pattern
         """
-        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
-        obs_types_list = ['ALL_DENSITY']  # No QTY_DENSITY in mock file
-        
+        obs_types_list = ['ALL_DENSITY']
+        obs_type_to_qty = {'FLOAT_TEMPERATURE': 'QTY_TEMPERATURE'}
+        qty_to_obs_types = {'QTY_TEMPERATURE': ['FLOAT_TEMPERATURE']}
+
         with pytest.raises(ValueError, match="No observation types found for"):
-            config.validate_and_expand_obs_types(obs_types_list, str(rst_file))
+            config.validate_and_expand_obs_types(
+                obs_types_list, (obs_type_to_qty, qty_to_obs_types)
+            )
 
 
 class TestValidateConfigKeys:
