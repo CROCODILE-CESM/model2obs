@@ -953,3 +953,66 @@ class TestModelAdapterROMSRutgers:
             force_obs_time = False
         )
         model_adapter.validate_run_options(run_opts)
+
+
+class TestGetModelTimeInDaysSeconds:
+    """Test suite for get_model_time_in_days_seconds() function."""
+    
+    def test_get_model_time_in_days_seconds_valid_file(self, tmp_path: Path):
+        """Test get_model_time_in_days_seconds with valid model file.
+        
+        Given: A NetCDF file with a single time dimension
+        When: get_model_time_in_days_seconds() is called
+        Then: Correct days and seconds are returned
+        """
+
+        model_file = tmp_path / "model.nc"
+        
+        ds = xr.Dataset({
+            'temp': (['time', 'x'], [[20.0, 21.0, 22.0]]),
+        }, coords={
+            'time': [np.datetime64('2020-06-15T12:00:00')],
+            'x': [0, 1, 2]
+        })
+        ds.to_netcdf(model_file)
+
+        adapter = create_model_adapter("mom6")
+        days, seconds = adapter.get_model_time_in_days_seconds(str(model_file))
+        
+        assert isinstance(days, (int, np.integer))
+        assert isinstance(seconds, (int, np.integer))
+        assert days > 150000
+        assert seconds == 12 * 3600
+    
+    def test_get_model_time_in_days_seconds_multiple_times_raises_error(self, tmp_path: Path):
+        """Test get_model_time_in_days_seconds raises error for multiple time steps.
+        
+        Given: A NetCDF file with multiple time steps
+        When: get_model_time_in_days_seconds() is called
+        Then: ValueError is raised
+        """
+        model_file = tmp_path / "model_multi.nc"
+        
+        ds = xr.Dataset({
+            'temp': (['time', 'x'], [[20.0, 21.0], [22.0, 23.0]]),
+        }, coords={
+            'time': [np.datetime64('2020-06-15T12:00:00'), 
+                     np.datetime64('2020-06-16T12:00:00')],
+            'x': [0, 1]
+        })
+        ds.to_netcdf(model_file)
+        
+        adapter = create_model_adapter("mom6")
+        with pytest.raises(ValueError, match="multiple time steps"):
+            adapter.get_model_time_in_days_seconds(str(model_file))
+    
+    def test_get_model_time_in_days_seconds_missing_file(self):
+        """Test get_model_time_in_days_seconds raises error for missing file.
+        
+        Given: A path to a nonexistent file
+        When: get_model_time_in_days_seconds() is called
+        Then: FileNotFoundError is raised
+        """
+        adapter = create_model_adapter("mom6")
+        with pytest.raises(FileNotFoundError):
+            adapter.get_model_time_in_days_seconds("/nonexistent/model.nc")

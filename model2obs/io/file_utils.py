@@ -42,7 +42,7 @@ def timestamp_to_days_seconds(timestamp: np.datetime64) -> Tuple[int, int]:
 def get_model_time_in_days_seconds(model_in_file: str, time_var: str) -> Tuple[int, int]:
     """Get model time in days and seconds from model input file."""
 
-    with xr.open_dataset(model_in_file, decode_timedelta=True) as model_ds:
+    with self.model_adapter.open_dataset_ctx(model_in_f) as model_ds:
         model_time = model_ds[time_var].values
     model_time = np.atleast_1d(model_time)
     if len(model_time) > 1:

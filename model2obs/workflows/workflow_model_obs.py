@@ -27,7 +27,18 @@ from ..utils import namelist
 from dataclasses import dataclass
 @dataclass(frozen=True)
 class RunOptions:
-    # default run options for largest compatibility
+    """Immutable record of the run-time flags for a workflow execution.
+
+    Attributes:
+        trim_obs: Trim obs_seq.in files to model grid boundaries before
+            passing them to ``perfect_model_obs``.
+        no_matching: Skip time-based obs/model file matching; assume a 1-to-1
+            correspondence between model output files and obs files.
+        force_obs_time: Override model snapshot time with the observation
+            reference time when writing ``input.nml``.
+    """
+
+    # defaults chosen for the widest compatibility with tutorial data
     trim_obs: bool = False
     no_matching: bool = False
     force_obs_time: bool = False
@@ -179,8 +190,8 @@ class WorkflowModelObs(workflow.Workflow):
                     precomputed_times: Dict[str, Optional[Tuple[int, int]]] = {}
                     if not force_obs_time:
                         for model_in_f in model_in_files:
-                            precomputed_times[model_in_f] = file_utils.get_model_time_in_days_seconds(
-                                model_in_f, self.model_adapter.time_varname
+                            precomputed_times[model_in_f] = self.model_adapter.get_model_time_in_days_seconds(
+                                model_in_f
                             )
 
                     with concurrent.futures.ThreadPoolExecutor(max_workers=None) as executor:
@@ -700,8 +711,8 @@ class WorkflowModelObs(workflow.Workflow):
                     model_time_days, model_time_seconds = precomputed_model_time
                 else:
                     print("          Retrieving model time from model input file and updating namelist...")
-                    model_time_days, model_time_seconds = file_utils.get_model_time_in_days_seconds(
-                        model_in_file, self.model_adapter.time_varname
+                    model_time_days, model_time_seconds = self.model_adapter.get_model_time_in_days_seconds(
+                        model_in_file
                     )
                 local_nml.update_namelist_param(
                     "perfect_model_obs_nml", "init_time_days", model_time_days, string=False
