@@ -895,6 +895,7 @@ class WorkflowModelObs(workflow.Workflow):
                 lines.append(_line("Original NC file", original_model_file))
             lines.append(_line("Time used", f"{time_used_str}  (from {time_source})"))
             lines.append(_line("Time window", str(tw)))
+            lines.append("---------- Window for observations ----------")
             lines.append(_line("Window start", window_start))
             lines.append(_line("Window end",   window_end))
 
