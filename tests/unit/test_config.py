@@ -687,10 +687,16 @@ class TestValidateAndExpandObsTypes:
         When: validate_and_expand_obs_types() is called
         Then: The same types are returned (no expansion)
         """
-        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
         obs_types_list = ['FLOAT_TEMPERATURE', 'FLOAT_SALINITY']
-        
-        result = config.validate_and_expand_obs_types(obs_types_list, str(rst_file))
+
+        obs_type_to_qty = {}
+        obs_type_to_qty['FLOAT_TEMPERATURE'] = 'QTY_TEMPERATURE'
+        obs_type_to_qty['FLOAT_SALINITY'] = 'QTY_SALINITY'
+        qty_to_obs_types = {}
+                
+        result = config.validate_and_expand_obs_types(
+            obs_types_list, (obs_type_to_qty, qty_to_obs_types)
+        )
         
         assert 'FLOAT_TEMPERATURE' in result
         assert 'FLOAT_SALINITY' in result
@@ -703,10 +709,26 @@ class TestValidateAndExpandObsTypes:
         When: validate_and_expand_obs_types() is called
         Then: All temperature observation types are returned
         """
-        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
         obs_types_list = ['ALL_TEMPERATURE']
         
-        result = config.validate_and_expand_obs_types(obs_types_list, str(rst_file))
+        obs_type_to_qty = {}
+        obs_type_to_qty['FLOAT_TEMPERATURE'] = 'QTY_TEMPERATURE'
+        obs_type_to_qty['CTD_TEMPERATURE'] = 'QTY_TEMPERATURE'
+        obs_type_to_qty['DRIFTER_TEMPERATURE'] = 'QTY_TEMPERATURE'
+        obs_type_to_qty['MOORING_TEMPERATURE'] = 'QTY_TEMPERATURE'
+        obs_type_to_qty['GLIDER_TEMPERATURE'] = 'QTY_TEMPERATURE'
+        qty_to_obs_types = {}
+        qty_to_obs_types['QTY_TEMPERATURE'] = [
+            'FLOAT_TEMPERATURE',
+            'CTD_TEMPERATURE',
+            'DRIFTER_TEMPERATURE',
+            'MOORING_TEMPERATURE',
+            'GLIDER_TEMPERATURE'            
+        ]
+        
+        result = config.validate_and_expand_obs_types(
+            obs_types_list, (obs_type_to_qty, qty_to_obs_types)
+        )
         
         assert 'FLOAT_TEMPERATURE' in result
         assert 'CTD_TEMPERATURE' in result
@@ -723,10 +745,24 @@ class TestValidateAndExpandObsTypes:
         When: validate_and_expand_obs_types() is called
         Then: All salinity observation types are returned
         """
-        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
         obs_types_list = ['ALL_SALINITY']
         
-        result = config.validate_and_expand_obs_types(obs_types_list, str(rst_file))
+        obs_type_to_qty = {}
+        obs_type_to_qty['FLOAT_SALINITY'] = 'QTY_SALINITY'
+        obs_type_to_qty['CTD_SALINITY'] = 'QTY_SALINITY'
+        obs_type_to_qty['MOORING_SALINITY'] = 'QTY_SALINITY'
+        obs_type_to_qty['GLIDER_SALINITY'] = 'QTY_SALINITY'
+        qty_to_obs_types = {}
+        qty_to_obs_types['QTY_SALINITY'] = [
+            'FLOAT_SALINITY',
+            'CTD_SALINITY',
+            'MOORING_SALINITY',
+            'GLIDER_SALINITY'            
+        ]
+        
+        result = config.validate_and_expand_obs_types(
+            obs_types_list, (obs_type_to_qty, qty_to_obs_types)
+        )
         
         assert 'FLOAT_SALINITY' in result
         assert 'CTD_SALINITY' in result
@@ -742,10 +778,25 @@ class TestValidateAndExpandObsTypes:
         When: validate_and_expand_obs_types() is called
         Then: Specific types and expanded ALL_ types are all returned
         """
-        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
         obs_types_list = ['CTD_TEMPERATURE', 'ALL_SALINITY']
+        obs_type_to_qty = {}
+        obs_type_to_qty['FLOAT_SALINITY'] = 'QTY_SALINITY'
+        obs_type_to_qty['CTD_SALINITY'] = 'QTY_SALINITY'
+        obs_type_to_qty['MOORING_SALINITY'] = 'QTY_SALINITY'
+        obs_type_to_qty['CTD_TEMPERATURE'] = 'QTY_TEMPERATURE'
+        qty_to_obs_types = {}
+        qty_to_obs_types['QTY_SALINITY'] = [
+            'FLOAT_SALINITY',
+            'CTD_SALINITY',
+            'MOORING_SALINITY',
+        ]
+        qty_to_obs_types['QTY_TEMPERATURE'] = [
+            'CTD_TEMPERATURE',
+        ]
         
-        result = config.validate_and_expand_obs_types(obs_types_list, str(rst_file))
+        result = config.validate_and_expand_obs_types(
+            obs_types_list, (obs_type_to_qty, qty_to_obs_types)
+        )
         
         assert 'CTD_TEMPERATURE' in result
         assert 'FLOAT_SALINITY' in result
@@ -759,11 +810,15 @@ class TestValidateAndExpandObsTypes:
         When: validate_and_expand_obs_types() is called
         Then: ValueError is raised indicating invalid type
         """
-        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
         obs_types_list = ['INVALID_TYPE']
+        obs_type_to_qty = {}
+        qty_to_obs_types = {}
         
         with pytest.raises(ValueError, match="Invalid observation type"):
-            config.validate_and_expand_obs_types(obs_types_list, str(rst_file))
+            config.validate_and_expand_obs_types(
+                obs_types_list,
+                (obs_type_to_qty, qty_to_obs_types)
+            )
     
     def test_validate_and_expand_obs_types_invalid_all(self, fixtures_root: Path):
         """Test validate_and_expand_obs_types raises error for invalid ALL_ pattern.
