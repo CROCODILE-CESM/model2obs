@@ -7,6 +7,7 @@ Tests the model adapter architecture including:
 - Dataset opening with context managers
 - Run options validation and capabilities checking
 - Configuration key requirements per model
+- parse_dart_obs_type() dispatcher behavior
 
 The tests use fixtures to create temporary netCDF files and mock
 dependencies where appropriate.
@@ -1016,3 +1017,87 @@ class TestGetModelTimeInDaysSeconds:
         adapter = create_model_adapter("mom6")
         with pytest.raises(FileNotFoundError):
             adapter.get_model_time_in_days_seconds("/nonexistent/model.nc")
+
+
+class TestParseDartObsType:
+    """Tests for ModelAdapter.parse_dart_obs_type().
+
+    Covers:
+    - Delegation to config_utils.parse_obs_def_ocean_mod for ocean models
+    - NotImplementedError for non-ocean models
+    - End-to-end parsing with a real fixture RST file
+    """
+
+    _MOCK_PARSE_TARGET = (
+        'model2obs.model_adapter.model_adapter.config_utils.parse_obs_def_ocean_mod'
+    )
+    _MOCK_RESULT = (
+        {'FLOAT_TEMPERATURE': 'QTY_TEMPERATURE'},
+        {'QTY_TEMPERATURE': ['FLOAT_TEMPERATURE']},
+    )
+
+    def test_parse_dart_obs_type_mom6_delegates_to_config_utils(self):
+        """Test parse_dart_obs_type calls parse_obs_def_ocean_mod for MOM6.
+
+        Given: A MOM6 adapter (is_ocean=True)
+        When: parse_dart_obs_type() is called
+        Then: config_utils.parse_obs_def_ocean_mod is called with the RST path
+              and its return value is returned unchanged
+        """
+        adapter = ModelAdapterMOM6()
+        with patch(self._MOCK_PARSE_TARGET, return_value=self._MOCK_RESULT) as mock_parser:
+            result = adapter.parse_dart_obs_type('/path/to/obs_def_ocean_mod.rst')
+            mock_parser.assert_called_once_with('/path/to/obs_def_ocean_mod.rst')
+            assert result == self._MOCK_RESULT
+
+    def test_parse_dart_obs_type_roms_delegates_to_config_utils(self):
+        """Test parse_dart_obs_type calls parse_obs_def_ocean_mod for ROMS.
+
+        Given: A ROMS_Rutgers adapter (is_ocean=True)
+        When: parse_dart_obs_type() is called
+        Then: config_utils.parse_obs_def_ocean_mod is called with the RST path
+        """
+        adapter = ModelAdapterROMSRutgers()
+        with patch(self._MOCK_PARSE_TARGET, return_value=self._MOCK_RESULT) as mock_parser:
+            result = adapter.parse_dart_obs_type('/path/to/obs_def_ocean_mod.rst')
+            mock_parser.assert_called_once_with('/path/to/obs_def_ocean_mod.rst')
+            assert result == self._MOCK_RESULT
+
+    def test_parse_dart_obs_type_non_ocean_raises_not_implemented(self):
+        """Test parse_dart_obs_type raises NotImplementedError when is_ocean is False.
+
+        Given: An adapter with is_ocean set to False
+        When: parse_dart_obs_type() is called
+        Then: NotImplementedError is raised
+        """
+        adapter = ModelAdapterMOM6()
+        adapter.is_ocean = False
+        with pytest.raises(NotImplementedError):
+            adapter.parse_dart_obs_type('/path/to/some.rst')
+
+    def test_parse_dart_obs_type_with_valid_rst_file(self, fixtures_root: Path):
+        """Test parse_dart_obs_type returns correct dicts from a real RST fixture.
+
+        Given: A MOM6 adapter and the mock_obs_def_ocean_mod.rst fixture file
+        When: parse_dart_obs_type() is called
+        Then: Returns non-empty obs_type_to_qty and qty_to_obs_types dicts
+        """
+        adapter = ModelAdapterMOM6()
+        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
+        obs_type_to_qty, qty_to_obs_types = adapter.parse_dart_obs_type(str(rst_file))
+
+        assert isinstance(obs_type_to_qty, dict)
+        assert isinstance(qty_to_obs_types, dict)
+        assert len(obs_type_to_qty) > 0
+        assert all(v.startswith('QTY_') for v in obs_type_to_qty.values())
+
+    def test_parse_dart_obs_type_missing_rst_file(self):
+        """Test parse_dart_obs_type raises FileNotFoundError for a missing RST file.
+
+        Given: A MOM6 adapter and a nonexistent RST file path
+        When: parse_dart_obs_type() is called
+        Then: FileNotFoundError is raised
+        """
+        adapter = ModelAdapterMOM6()
+        with pytest.raises(FileNotFoundError):
+            adapter.parse_dart_obs_type('/nonexistent/obs_def_ocean_mod.rst')

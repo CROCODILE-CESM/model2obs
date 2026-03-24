@@ -346,10 +346,15 @@ class TestInitializeModelNamelist:
         assert workflow._namelist == mock_nml
         assert mock_nml.update_namelist_param.call_count >= 5
     
+    @patch('model2obs.model_adapter.model_adapter.ModelAdapter.parse_dart_obs_type',
+           return_value=({'FLOAT_TEMPERATURE': 'QTY_TEMPERATURE',
+                          'DRIFTER_TEMPERATURE': 'QTY_TEMPERATURE'},
+                         {'QTY_TEMPERATURE': ['FLOAT_TEMPERATURE', 'DRIFTER_TEMPERATURE']}))
     @patch('model2obs.workflows.workflow_model_obs.config_utils.validate_and_expand_obs_types')
     @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist')
-    def test_initialize_model_namelist_with_obs_types(self, mock_namelist_class, 
-                                                     mock_validate_obs, tmp_path, capsys):
+    def test_initialize_model_namelist_with_obs_types(self, mock_namelist_class,
+                                                     mock_validate_obs, mock_parse_dart_obs,
+                                                     tmp_path, capsys):
         """Test _initialize_model_namelist processes use_these_obs config."""
         config = {
             'ocean_model': 'MOM6',
