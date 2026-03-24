@@ -323,7 +323,7 @@ class TestMain:
         
         with patch('os.makedirs'):
             with patch('os.remove'):
-                metadata_url = "https://zenodo.org/api/records/17524900"
+                metadata_url = "https://zenodo.org/api/records/19204393"
                 mock_response = {
                     'files': [
                         {
@@ -360,7 +360,7 @@ class TestMain:
         
         with patch('os.makedirs'):
             with patch('os.remove'):
-                metadata_url = "https://zenodo.org/api/records/17524900"
+                metadata_url = "https://zenodo.org/api/records/19204393"
                 mock_response = {
                     'files': [
                         {
@@ -396,7 +396,7 @@ class TestMain:
         
         with patch('os.makedirs'):
             with patch('os.remove'):
-                metadata_url = "https://zenodo.org/api/records/17524900"
+                metadata_url = "https://zenodo.org/api/records/19204393"
                 mock_response = {
                     'files': [
                         {
@@ -426,7 +426,7 @@ class TestMain:
         monkeypatch.setattr('sys.argv', test_args)
         
         with patch('os.makedirs'):
-            metadata_url = "https://zenodo.org/api/records/17524900"
+            metadata_url = "https://zenodo.org/api/records/19204393"
             mock_response = {
                 'files': [
                     {
@@ -460,7 +460,7 @@ class TestMain:
         
         with patch('os.makedirs'):
             with patch('os.remove') as mock_remove:
-                metadata_url = "https://zenodo.org/api/records/17524900"
+                metadata_url = "https://zenodo.org/api/records/19204393"
                 mock_response = {
                     'files': [
                         {
