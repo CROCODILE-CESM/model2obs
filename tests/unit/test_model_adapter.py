@@ -1413,3 +1413,35 @@ class TestGetModelBoundaries:
         assert hull_lon_max <= lon_max
         assert hull_lat_min >= lat_min
         assert hull_lat_max <= lat_max
+
+    def test_get_model_boundaries_geometry_file_no_time(self, tmp_path: Path):
+        """Test get_model_boundaries works on a static geometry file with no time variable.
+
+        The ocean_geometry file (used in production) contains only spatial variables —
+        no time dimension.  Previously get_model_boundaries used a plain xr.open_dataset;
+        the refactored version must not rely on the MOM6 open_dataset_ctx which tries to
+        access self.time_varname ('time') and raises KeyError on timeless files.
+
+        Given: A geometry-like NetCDF with lonh, lath, wet but NO time variable
+        When: get_model_boundaries() is called
+        Then: Returns a valid Polygon and hull points without raising KeyError
+        """
+        model_file = tmp_path / "ocean_geometry.nc"
+
+        lonh = np.linspace(10.0, 15.0, 5)
+        lath = np.linspace(40.0, 45.0, 5)
+        wet = np.ones((len(lath), len(lonh)), dtype=int)
+
+        ds = xr.Dataset({
+            'wet': (['lath', 'lonh'], wet),
+            'lonh': lonh,
+            'lath': lath,
+        })
+        ds.to_netcdf(model_file)
+
+        adapter = create_model_adapter("mom6")
+        hull_polygon, hull_points = adapter.get_model_boundaries(str(model_file))
+
+        assert isinstance(hull_polygon, Polygon)
+        assert isinstance(hull_points, np.ndarray)
+        assert hull_polygon.is_valid
