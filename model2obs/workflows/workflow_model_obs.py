@@ -176,7 +176,7 @@ class WorkflowModelObs(workflow.Workflow):
         hull_polygon, hull_points = None, None
         if trim_obs:
             print("  Getting model boundaries...")
-            hull_polygon, hull_points = model_tools.get_model_boundaries(self.config['ocean_geometry'])
+            hull_polygon, hull_points = self.model_adapter.get_model_boundaries(self.config['ocean_geometry'])
 
         # Validate that model files have non-overlapping timestamps (cheap metadata read)
         self._validate_model_file_timestamps(model_in_files)
