@@ -2,7 +2,9 @@
 
 **model2obs** is a Python toolset for comparing ocean model outputs and observation datasets. It streamlines workflows for interpolating model data into the observation space, producing tabular data in Parquet format ready for analysis and interactive visualization.
 
-**New in December 2025:** model2obs now supports **ROMS (Regional Ocean Modeling System)** in addition to MOM6, with a flexible model adapter architecture that enables easy extension to other ocean models. The new architecture abstracts model-specific operations (file I/O, unit conversions, configuration requirements) into dedicated adapters, making the codebase more maintainable and extensible.
+**New in March 2026:** model2obs (v0.5.1) now supports **parallel processing** of model output files! See the parallel version of Tutorial 1 for how to use it. It also supports the latest DART v11.21.2, including update scripts to install model2obs on NCAR's Casper HPC. A bug where the wrong calendar was used when converting model time to days, seconds, has also been fixed.   
+
+**New in December 2025:** model2obs (v0.3.0) now supports **ROMS (Regional Ocean Modeling System)** in addition to MOM6, with a flexible model adapter architecture that enables easy extension to other ocean models. The new architecture abstracts model-specific operations (file I/O, unit conversions, configuration requirements) into dedicated adapters, making the codebase more maintainable and extensible.
 
 ## Summary
 
