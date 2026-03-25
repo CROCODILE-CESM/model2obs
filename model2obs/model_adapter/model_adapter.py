@@ -175,6 +175,7 @@ class ModelAdapter(ABC):
     
         return False
 
+    
     def parse_dart_obs_type(self, rst_file_path: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
         """Select parser depending on model (currently ocean only)"""
 
@@ -184,3 +185,7 @@ class ModelAdapter(ABC):
         raise NotImplementedError("Only ocean models are currently supported")
 
 
+    def get_model_boundaries(self):
+        raise NotImplementedError(
+            "This method is not implemented for the selected model"
+        )
