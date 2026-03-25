@@ -1,6 +1,6 @@
 [project]
 name = "model2obs"
-version = "0.5.0"
+version = "0.5.1"
 description = "Python package for comparing ocean models with observations."
 authors = [{ name="Enrico Milanese", email="enrico.milanese@whoi.edu" }]
 readme = "README.md"

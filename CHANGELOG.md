@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2026-03-25
+- Add support to DART v11.21.2: MOM6 model_state_variables in input.nml now contains 5 values
+- Update paths in install files for NCAR install to link to new pre-installed DART v11.21.2 on Casper
+- Add reader method to ModelAdapter to dispatch correct parser for DART observation types depending on component (allows for future inclusion of CICE, for example)
+- Add supports for parallel processing of model output files
+- model_tools methods have been moved to ModelAdapter
+	
 ## [0.5.0] - 2026-03-24
 - Add supports for parallel processing of model output files
 - Add tutorial 1 parallel version
