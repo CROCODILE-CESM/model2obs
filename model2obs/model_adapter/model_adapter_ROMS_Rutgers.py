@@ -76,13 +76,17 @@ class ModelAdapterROMSRutgers(ModelAdapter):
 
     @contextmanager
     def open_dataset_ctx(self, path: str) -> Iterator[xr.Dataset]:
-        """Open a ROMS dataset with proper time decoding and calendar handling.
+        """Open a ROMS dataset, applying time fixes only when a time variable is present.
+
+        For time-varying model output files, the time variable is decoded and renamed to
+        the canonical ``"time"`` name. For static files that carry no time dimension,
+        the dataset is returned as-is.
 
         Args:
-            path: Path to ROMS netCDF file
+            path: Path to the netCDF file.
 
         Yields:
-            xr.Dataset with properly decoded times and renamed time variable
+            xr.Dataset ready for use; time variable renamed to ``"time"`` when present.
         """
         
         ds = xr.open_dataset(
@@ -91,9 +95,11 @@ class ModelAdapterROMSRutgers(ModelAdapter):
         )
 
         try:
-            # Fix calendar as xarray does not read it consistently with ncviews
-            ds = xr.decode_cf(ds, decode_timedelta=True)
-            ds = self.rename_time_varname(ds)
+            # Fix calendar as xarray does not read it consistently with ncviews.
+            # Static geometry files have no time variable, so skip time processing.
+            if self.time_varname in ds:
+                ds = xr.decode_cf(ds, decode_timedelta=True)
+                ds = self.rename_time_varname(ds)
             yield ds
         finally:
             ds.close()

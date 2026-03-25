@@ -101,13 +101,17 @@ class ModelAdapterMOM6(ModelAdapter):
 
     @contextmanager
     def open_dataset_ctx(self, path: str) -> Iterator[xr.Dataset]:
-        """Open a MOM6 dataset with proper time decoding and calendar handling.
+        """Open a MOM6 dataset, applying time fixes only when a time variable is present.
+
+        For time-varying model output files, the MOM6 calendar attribute is fixed and the
+        time variable is renamed to the canonical ``"time"`` name. For static files such
+        as ``ocean_geometry.nc`` that carry no time dimension, the dataset is returned as-is.
 
         Args:
-            path: Path to MOM6 netCDF file
+            path: Path to the netCDF file.
 
         Yields:
-            xr.Dataset with properly decoded times and renamed time variable
+            xr.Dataset ready for use; time variable renamed to ``"time"`` when present.
         """
         
         ds = xr.open_dataset(
@@ -116,10 +120,12 @@ class ModelAdapterMOM6(ModelAdapter):
         )
 
         try:
-            # Fix calendar as xarray does not read it consistently with ncviews
-            ds[self.time_varname].attrs['calendar'] = 'proleptic_gregorian'
-            ds = xr.decode_cf(ds, decode_timedelta=True)
-            ds = self.rename_time_varname(ds)
+            # Fix calendar as xarray does not read it consistently with ncviews.
+            # Static geometry files have no time variable, so skip time processing.
+            if self.time_varname in ds:
+                ds[self.time_varname].attrs['calendar'] = 'proleptic_gregorian'
+                ds = xr.decode_cf(ds, decode_timedelta=True)
+                ds = self.rename_time_varname(ds)
             yield ds
         finally:
             ds.close()
@@ -142,10 +148,10 @@ class ModelAdapterMOM6(ModelAdapter):
     
         return df
 
-    def get_model_boundaries(self, model_file: str, margin: float = 0.0) -> Tuple[Polygon, np.ndarray]:
+    def get_model_boundaries(self, geometry_file: str, margin: float = 0.0) -> Tuple[Polygon, np.ndarray]:
         """Get geographical boundaries from model input file using convex hull."""
 
-        with self.open_dataset_ctx(model_file) as ds:
+        with self.open_dataset_ctx(geometry_file) as ds:
             # Extract geographical coordinates from the dataset
             xh = ds['lonh'].values
             yh = ds['lath'].values

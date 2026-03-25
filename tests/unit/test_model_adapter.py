@@ -262,6 +262,30 @@ class TestModelAdapterMOM6:
             with model_adapter.open_dataset_ctx(nonexistent) as ds:
                 pass
 
+    def test_open_dataset_ctx_no_time_variable(self, tmp_path: Path):
+        """Test open_dataset_ctx succeeds on a static geometry file with no time variable.
+
+        Given: A NetCDF file with spatial variables only (no time dimension)
+        When:  open_dataset_ctx is used to open it
+        Then:  The dataset is yielded without error and spatial variables are accessible
+        """
+        geometry_nc = tmp_path / "ocean_geometry.nc"
+        lonh = np.linspace(10.0, 15.0, 4)
+        lath = np.linspace(40.0, 45.0, 4)
+        ds_in = xr.Dataset({
+            'wet': (['lath', 'lonh'], np.ones((len(lath), len(lonh)), dtype=int)),
+            'lonh': lonh,
+            'lath': lath,
+        })
+        ds_in.to_netcdf(geometry_nc)
+
+        adapter = create_model_adapter("mom6")
+        with adapter.open_dataset_ctx(str(geometry_nc)) as ds:
+            assert "time" not in ds
+            assert "lonh" in ds
+            assert "lath" in ds
+            assert "wet" in ds
+
     def test_validate_run_options_all_true(self):
         """Test that all run options are validated"""
         model_adapter = create_model_adapter("mom6")
@@ -932,6 +956,25 @@ class TestModelAdapterROMSRutgers:
             with model_adapter.open_dataset_ctx(nonexistent) as ds:
                 pass
 
+    def test_open_dataset_ctx_no_time_variable(self, tmp_path: Path):
+        """Test open_dataset_ctx succeeds on a static file with no time variable.
+
+        Given: A NetCDF file with spatial variables only (no time dimension)
+        When:  open_dataset_ctx is used to open it
+        Then:  The dataset is yielded without error and spatial variables are accessible
+        """
+        geometry_nc = tmp_path / "roms_grid.nc"
+        ds_in = xr.Dataset({
+            'h': (['eta_rho', 'xi_rho'], np.ones((4, 4), dtype=float)),
+        })
+        ds_in.to_netcdf(geometry_nc)
+
+        adapter = create_model_adapter("roms_rutgers")
+        with adapter.open_dataset_ctx(str(geometry_nc)) as ds:
+            assert "ocean_time" not in ds
+            assert "time" not in ds
+            assert "h" in ds
+
     def test_validate_run_options_all_true(self):
         """Test that not all run options are supported"""
         model_adapter = create_model_adapter("roms_rutgers")
@@ -1119,23 +1162,17 @@ class TestGetModelBoundaries:
         lonh = np.array([10.0, 11.0, 12.0])
         lath = np.array([40.0, 41.0, 42.0])
         wet = np.ones((len(lath), len(lonh)), dtype=int)
-        time = [
-            np.datetime64('2020-06-15T12:00:00'),
-            np.datetime64('2020-06-16T12:00:00'),
-            np.datetime64('2020-06-17T12:00:00'),
-        ]
-        
+
         ds = xr.Dataset({
             'wet': (['lath', 'lonh'], wet),
             'lonh': lonh,
             'lath': lath,
-            'time': time
         })
         ds.to_netcdf(model_file)
-        
+
         adapter = create_model_adapter("mom6")
         hull_polygon, hull_points = adapter.get_model_boundaries(str(model_file))
-        
+
         assert isinstance(hull_polygon, Polygon)
         assert isinstance(hull_points, np.ndarray)
         assert hull_polygon.is_valid
@@ -1153,17 +1190,11 @@ class TestGetModelBoundaries:
         lonh = np.array([-10.0, -5.0, 0.0, 5.0])
         lath = np.array([40.0, 41.0, 42.0])
         wet = np.ones((len(lath), len(lonh)), dtype=int)
-        time = [
-            np.datetime64('2020-06-15T12:00:00'),
-            np.datetime64('2020-06-16T12:00:00'),
-            np.datetime64('2020-06-17T12:00:00'),
-        ]
-        
+
         ds = xr.Dataset({
             'wet': (['lath', 'lonh'], wet),
             'lonh': lonh,
             'lath': lath,
-            'time': time
         })
         ds.to_netcdf(model_file)
         
@@ -1188,17 +1219,11 @@ class TestGetModelBoundaries:
         wet[0, 0] = 0
         wet[0, -1] = 0
         wet[-1, 0] = 0
-        time = [
-            np.datetime64('2020-06-15T12:00:00'),
-            np.datetime64('2020-06-16T12:00:00'),
-            np.datetime64('2020-06-17T12:00:00'),
-        ]
-        
+
         ds = xr.Dataset({
             'wet': (['lath', 'lonh'], wet),
             'lonh': lonh,
             'lath': lath,
-            'time': time
         })
         ds.to_netcdf(model_file)
         
@@ -1222,20 +1247,14 @@ class TestGetModelBoundaries:
         lonh = np.array([10.0, 11.0, 12.0, 13.0, 14.0])
         lath = np.array([40.0, 41.0, 42.0, 43.0, 44.0])
         wet = np.zeros((len(lath), len(lonh)), dtype=int)
-        time = [
-            np.datetime64('2020-06-15T12:00:00'),
-            np.datetime64('2020-06-16T12:00:00'),
-            np.datetime64('2020-06-17T12:00:00'),
-        ]
-        
+
         wet[0:3, 0:2] = 1
         wet[0:5, 2] = 1
-        
+
         ds = xr.Dataset({
             'wet': (['lath', 'lonh'], wet),
             'lonh': lonh,
             'lath': lath,
-            'time': time
         })
         ds.to_netcdf(model_file)
         
@@ -1259,17 +1278,11 @@ class TestGetModelBoundaries:
         wet = np.zeros((len(lath), len(lonh)), dtype=int)
         wet[0, 0] = 1
         wet[1, 1] = 1
-        time = [
-            np.datetime64('2020-06-15T12:00:00'),
-            np.datetime64('2020-06-16T12:00:00'),
-            np.datetime64('2020-06-17T12:00:00'),
-        ]
-        
+
         ds = xr.Dataset({
             'wet': (['lath', 'lonh'], wet),
             'lonh': lonh,
             'lath': lath,
-            'time': time
         })
         ds.to_netcdf(model_file)
         
@@ -1319,17 +1332,11 @@ class TestGetModelBoundaries:
         lonh = np.array([10.0, 11.0, 12.0])
         lath = np.array([40.0, 41.0, 42.0])
         wet = np.zeros((len(lath), len(lonh)), dtype=int)
-        time = [
-            np.datetime64('2020-06-15T12:00:00'),
-            np.datetime64('2020-06-16T12:00:00'),
-            np.datetime64('2020-06-17T12:00:00'),
-        ]
-        
+
         ds = xr.Dataset({
             'wet': (['lath', 'lonh'], wet),
             'lonh': lonh,
             'lath': lath,
-            'time': time
         })
         ds.to_netcdf(model_file)
         
@@ -1349,17 +1356,11 @@ class TestGetModelBoundaries:
         lonh = np.array([10.0, 11.0, 12.0, 13.0])
         lath = np.array([40.0, 41.0, 42.0])
         wet = np.ones((len(lath), len(lonh)), dtype=int)
-        time = [
-            np.datetime64('2020-06-15T12:00:00'),
-            np.datetime64('2020-06-16T12:00:00'),
-            np.datetime64('2020-06-17T12:00:00'),
-        ]
-        
+
         ds = xr.Dataset({
             'wet': (['lath', 'lonh'], wet),
             'lonh': lonh,
             'lath': lath,
-            'time': time
         })
         ds.to_netcdf(model_file)
         
@@ -1387,17 +1388,11 @@ class TestGetModelBoundaries:
         lonh = np.linspace(lon_min, lon_max, 6)
         lath = np.linspace(lat_min, lat_max, 6)
         wet = np.ones((len(lath), len(lonh)), dtype=int)
-        time = [
-            np.datetime64('2020-06-15T12:00:00'),
-            np.datetime64('2020-06-16T12:00:00'),
-            np.datetime64('2020-06-17T12:00:00'),
-        ]
-        
+
         ds = xr.Dataset({
             'wet': (['lath', 'lonh'], wet),
             'lonh': lonh,
             'lath': lath,
-            'time': time
         })
         ds.to_netcdf(model_file)
         
@@ -1413,3 +1408,35 @@ class TestGetModelBoundaries:
         assert hull_lon_max <= lon_max
         assert hull_lat_min >= lat_min
         assert hull_lat_max <= lat_max
+
+    def test_get_model_boundaries_geometry_file_no_time(self, tmp_path: Path):
+        """Test get_model_boundaries works on a static geometry file with no time variable.
+
+        The ocean_geometry file (used in production) contains only spatial variables —
+        no time dimension.  Previously get_model_boundaries used a plain xr.open_dataset;
+        the refactored version must not rely on the MOM6 open_dataset_ctx which tries to
+        access self.time_varname ('time') and raises KeyError on timeless files.
+
+        Given: A geometry-like NetCDF with lonh, lath, wet but NO time variable
+        When: get_model_boundaries() is called
+        Then: Returns a valid Polygon and hull points without raising KeyError
+        """
+        model_file = tmp_path / "ocean_geometry.nc"
+
+        lonh = np.linspace(10.0, 15.0, 5)
+        lath = np.linspace(40.0, 45.0, 5)
+        wet = np.ones((len(lath), len(lonh)), dtype=int)
+
+        ds = xr.Dataset({
+            'wet': (['lath', 'lonh'], wet),
+            'lonh': lonh,
+            'lath': lath,
+        })
+        ds.to_netcdf(model_file)
+
+        adapter = create_model_adapter("mom6")
+        hull_polygon, hull_points = adapter.get_model_boundaries(str(model_file))
+
+        assert isinstance(hull_polygon, Polygon)
+        assert isinstance(hull_points, np.ndarray)
+        assert hull_polygon.is_valid
