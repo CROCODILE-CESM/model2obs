@@ -1372,7 +1372,7 @@ class TestParallelDispatch:
     @patch.object(WorkflowModelObs, '_initialize_model_namelist')
     @patch('model2obs.workflows.workflow_model_obs.file_utils.get_sorted_files')
     @patch('model2obs.model_adapter.model_adapter_MOM6.ModelAdapterMOM6.validate_paths')
-    @patch('model2obs.workflows.workflow_model_obs.model_tools.get_model_boundaries',
+    @patch('model2obs.model_adapter.model_adapter_MOM6.ModelAdapterMOM6.get_model_boundaries',
            return_value=('polygon', 'points'))
     def test_trim_obs_calls_get_model_boundaries(
         self, mock_boundaries, mock_validate_paths, mock_get_files, mock_init_nml,
