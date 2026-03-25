@@ -19,7 +19,6 @@ import xarray as xr
 
 from . import workflow
 from ..io import file_utils
-from ..io import model_tools  
 from ..io import obs_seq_tools
 from ..utils import config as config_utils
 from ..utils import namelist
