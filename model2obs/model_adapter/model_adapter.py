@@ -185,7 +185,7 @@ class ModelAdapter(ABC):
         raise NotImplementedError("Only ocean models are currently supported")
 
 
-    def get_model_boundaries(self):
+    def get_model_boundaries(self, model_file: str, margin: float = 0.0):
         raise NotImplementedError(
             "This method is not implemented for the selected model"
         )
