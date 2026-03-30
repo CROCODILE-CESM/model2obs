@@ -35,6 +35,7 @@ from typing import Type
 from .model_adapter import ModelAdapter
 from .model_adapter_MOM6 import ModelAdapterMOM6
 from .model_adapter_ROMS_Rutgers import ModelAdapterROMSRutgers
+from .model_adapter_CICE import ModelAdapterCICE
 
 _ADAPTERS: dict[str, Type[ModelAdapter]] = {
     "mom6": ModelAdapterMOM6,
