@@ -21,7 +21,7 @@ def resolve_path(path: str, relative_to: str = None) -> str:
 def resolve_config_paths(config: Dict[str,any], relative_to: str = None) -> Dict[str,any]:
     """Resolve paths in config settings."""
     for key in config:
-        if isinstance(config[key], str) and key not in ["layer_name","ocean_model"]:
+        if isinstance(config[key], str) and key not in ["layer_name","model_name"]:
             config[key] = resolve_path(config[key], relative_to)
     return config
 
