@@ -6,9 +6,9 @@
 # ouputs. Copy this file and modify the paths below to match your local system
 # setup. For more details, see the README.md file and tutorial notebooks.
 
-# Ocean model to use (required)
-# Supported values: MOM6, ROMS_Rutgers
-ocean_model: MOM6
+# Ocean or sea-ice model to use (required)
+# Supported values: MOM6, ROMS_Rutgers, CICE
+model_name: MOM6
 
 ####### INPUT FILES #######
 # Directory containing model output files (.nc format) that you want to
