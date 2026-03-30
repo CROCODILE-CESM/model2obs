@@ -14,6 +14,7 @@ dependencies where appropriate.
 """
 
 import os
+import shutil
 import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -1067,13 +1068,13 @@ class TestParseDartObsType:
     """Tests for ModelAdapter.parse_dart_obs_type().
 
     Covers:
-    - Delegation to config_utils.parse_obs_def_ocean_mod for ocean models
+    - Delegation to config_utils.parse_obs_def_model_mod for ocean models
     - NotImplementedError for non-ocean models
     - End-to-end parsing with a real fixture RST file
     """
 
     _MOCK_PARSE_TARGET = (
-        'model2obs.model_adapter.model_adapter.config_utils.parse_obs_def_ocean_mod'
+        'model2obs.model_adapter.model_adapter.config_utils.parse_obs_def_model_mod'
     )
     _MOCK_RESULT = (
         {'FLOAT_TEMPERATURE': 'QTY_TEMPERATURE'},
@@ -1081,29 +1082,29 @@ class TestParseDartObsType:
     )
 
     def test_parse_dart_obs_type_mom6_delegates_to_config_utils(self):
-        """Test parse_dart_obs_type calls parse_obs_def_ocean_mod for MOM6.
+        """Test parse_dart_obs_type calls parse_obs_def_model_mod for MOM6.
 
         Given: A MOM6 adapter (is_ocean=True)
         When: parse_dart_obs_type() is called
-        Then: config_utils.parse_obs_def_ocean_mod is called with the RST path
+        Then: config_utils.parse_obs_def_model_mod is called with the RST path
               and its return value is returned unchanged
         """
         adapter = ModelAdapterMOM6()
         with patch(self._MOCK_PARSE_TARGET, return_value=self._MOCK_RESULT) as mock_parser:
-            result = adapter.parse_dart_obs_type('/path/to/obs_def_ocean_mod.rst')
+            result = adapter.parse_dart_obs_type('/path/to/')
             mock_parser.assert_called_once_with('/path/to/obs_def_ocean_mod.rst')
             assert result == self._MOCK_RESULT
 
     def test_parse_dart_obs_type_roms_delegates_to_config_utils(self):
-        """Test parse_dart_obs_type calls parse_obs_def_ocean_mod for ROMS.
+        """Test parse_dart_obs_type calls parse_obs_def_model_mod for ROMS.
 
         Given: A ROMS_Rutgers adapter (is_ocean=True)
         When: parse_dart_obs_type() is called
-        Then: config_utils.parse_obs_def_ocean_mod is called with the RST path
+        Then: config_utils.parse_obs_def_model_mod is called with the RST path
         """
         adapter = ModelAdapterROMSRutgers()
         with patch(self._MOCK_PARSE_TARGET, return_value=self._MOCK_RESULT) as mock_parser:
-            result = adapter.parse_dart_obs_type('/path/to/obs_def_ocean_mod.rst')
+            result = adapter.parse_dart_obs_type('/path/to/')
             mock_parser.assert_called_once_with('/path/to/obs_def_ocean_mod.rst')
             assert result == self._MOCK_RESULT
 
@@ -1120,16 +1121,19 @@ class TestParseDartObsType:
         with pytest.raises(NotImplementedError):
             adapter.parse_dart_obs_type('/path/to/some.rst')
 
-    def test_parse_dart_obs_type_with_valid_rst_file(self, fixtures_root: Path):
-        """Test parse_dart_obs_type returns correct dicts from a real RST fixture.
+    def test_parse_dart_obs_type_with_valid_rst_file(self, fixtures_root: Path, tmp_path: Path):
+        """Test parse_dart_obs_type returns correct dicts for an ocean adapter.
 
-        Given: A MOM6 adapter and the mock_obs_def_ocean_mod.rst fixture file
-        When: parse_dart_obs_type() is called
+        Given: A MOM6 adapter and a directory containing obs_def_ocean_mod.rst
+        When: parse_dart_obs_type() is called with the directory path
         Then: Returns non-empty obs_type_to_qty and qty_to_obs_types dicts
         """
+        shutil.copy(
+            fixtures_root / "mock_obs_def_ocean_mod.rst",
+            tmp_path / "obs_def_ocean_mod.rst"
+        )
         adapter = ModelAdapterMOM6()
-        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
-        obs_type_to_qty, qty_to_obs_types = adapter.parse_dart_obs_type(str(rst_file))
+        obs_type_to_qty, qty_to_obs_types = adapter.parse_dart_obs_type(str(tmp_path))
 
         assert isinstance(obs_type_to_qty, dict)
         assert isinstance(qty_to_obs_types, dict)
