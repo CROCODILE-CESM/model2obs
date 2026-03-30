@@ -24,6 +24,7 @@ class ModelAdapterCapabilities:
     supports_no_matching: bool = True
     supports_force_obs_time: bool = True
     is_ocean: bool = False
+    is_sea_ice: bool = False
 
 
 class ModelAdapter(ABC):
@@ -43,6 +44,7 @@ class ModelAdapter(ABC):
         - self.ocean_model: Name of the ocean model (str)
         - self.time_varname: Name of the time variable in model files (str)
         - self.is_ocean: Toggle for ocean model output (bool)
+        - self.is_sea_ice: Toggle for sea ice model output (bool)
         """
         pass  # Subclasses must implement
 
@@ -182,7 +184,12 @@ class ModelAdapter(ABC):
         if self.is_ocean:
             return config_utils.parse_obs_def_ocean_mod(rst_file_path)
 
-        raise NotImplementedError("Only ocean models are currently supported")
+        if self.is_sea_ice:
+            return config_utils.parse_obs_def_cice_mod(rst_file_path)
+
+        raise NotImplementedError(
+            "Only ocean and sea ice models are currently supported"
+        )
 
 
     def get_model_boundaries(self, geometry_file: str, margin: float = 0.0):
