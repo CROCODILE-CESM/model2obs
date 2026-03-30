@@ -315,7 +315,7 @@ class WorkflowModelObs(workflow.Workflow):
             "model_nml", "assimilation_period_seconds", self.config['time_window']['seconds'], string=False
         )
 
-        print(f'ocean model: {self.model_adapter.ocean_model}')
+        print(f'ocean model: {self.model_adapter.model_name}')
         common_model_keys = self.model_adapter.get_common_model_keys()
         for key in self.config.keys():
             if key=='debug':

@@ -41,7 +41,7 @@ class ModelAdapter(ABC):
 
         Note: This is an abstract base class. Subclasses must override this
         method to set:
-        - self.ocean_model: Name of the ocean model (str)
+        - self.model_name: Name of the ocean model (str)
         - self.time_varname: Name of the time variable in model files (str)
         - self.is_ocean: Toggle for ocean model output (bool)
         - self.is_sea_ice: Toggle for sea ice model output (bool)
@@ -115,17 +115,17 @@ class ModelAdapter(ABC):
         cap = self.capabilities
         if opts.trim_obs and not cap.supports_trim_obs:
             raise NotImplementedError(
-                f"{self.ocean_model} adapter does not support "
+                f"{self.model_name} adapter does not support "
                 f"observation files trimming."
             )
         if opts.no_matching and not cap.supports_no_matching:
             raise NotImplementedError(
-                f"{self.ocean_model} adapter does not support "
+                f"{self.model_name} adapter does not support "
                 f"skipping time matching."
             )
         if opts.force_obs_time and not cap.supports_force_obs_time:
             raise NotImplementedError(
-                f"{self.ocean_model} adapter does not support "
+                f"{self.model_name} adapter does not support "
                 f"assigning the observations reference time to model files."
             )       
 
