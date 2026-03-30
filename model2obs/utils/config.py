@@ -144,11 +144,11 @@ def clear_folder(folder_path: str) -> None:
         except OSError as e:
             print(f'Failed to delete {file_path}. Reason: {e}')
 
-def parse_obs_def_ocean_mod(rst_file_path: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
-    """Parse obs_def_ocean_mod.rst file to extract observation type definitions.
+def parse_obs_def_model_mod(obs_def_file_path: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
+    """Parse obs_def_model_mod file to extract observation type definitions.
 
     Args:
-        rst_file_path: Path to the obs_def_ocean_mod.rst file
+        obs_def_file_path: Path to the obs_def_model_mod file (e.g. to obs_def_ocean_mod.rst)
 
     Returns:
         Tuple containing:
@@ -156,20 +156,20 @@ def parse_obs_def_ocean_mod(rst_file_path: str) -> Tuple[Dict[str, str], Dict[st
         - qty_to_obs_types: Dictionary mapping QTY values to lists of observation types
 
     Raises:
-        FileNotFoundError: If the RST file doesn't exist
+        FileNotFoundError: If the file doesn't exist
         ValueError: If the type definitions section isn't found or is malformed
     """
-    if not os.path.isfile(rst_file_path):
-        raise FileNotFoundError(f"RST file '{rst_file_path}' does not exist")
+    if not os.path.isfile(obs_def_file_path):
+        raise FileNotFoundError(f"File '{obs_def_file_path}' does not exist")
 
     obs_type_to_qty = {}
     qty_to_obs_types = {}
 
     try:
-        with open(rst_file_path, 'r', encoding='utf-8') as f:
+        with open(obs_def_file_path, 'r', encoding='utf-8') as f:
             content = f.read()
     except IOError as e:
-        raise IOError(f"Could not read RST file '{rst_file_path}': {e}") from e
+        raise IOError(f"Could not read file '{obs_def_file_path}': {e}") from e
 
     # Find the section between BEGIN and END markers
     begin_pattern = r'! BEGIN DART PREPROCESS TYPE DEFINITIONS'
@@ -179,7 +179,7 @@ def parse_obs_def_ocean_mod(rst_file_path: str) -> Tuple[Dict[str, str], Dict[st
     end_match = re.search(end_pattern, content)
 
     if not begin_match or not end_match:
-        raise ValueError(f"Could not find type definitions section in '{rst_file_path}'")
+        raise ValueError(f"Could not find type definitions section in '{obs_def_file_path}'")
 
     # Extract the section content
     section_content = content[begin_match.end():end_match.start()]
@@ -211,9 +211,10 @@ def parse_obs_def_ocean_mod(rst_file_path: str) -> Tuple[Dict[str, str], Dict[st
             qty_to_obs_types[qty_type].append(obs_type)
 
     if not obs_type_to_qty:
-        raise ValueError(f"No observation type definitions found in '{rst_file_path}'")
+        raise ValueError(f"No observation type definitions found in '{obs_def_file_path}'")
 
     return obs_type_to_qty, qty_to_obs_types
+
 
 def validate_and_expand_obs_types(
         obs_types_list: List[str],

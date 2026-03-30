@@ -315,7 +315,7 @@ class WorkflowModelObs(workflow.Workflow):
             "model_nml", "assimilation_period_seconds", self.config['time_window']['seconds'], string=False
         )
 
-        print(f'ocean model: {self.model_adapter.model_name}')
+        print(f'model: {self.model_adapter.model_name}')
         common_model_keys = self.model_adapter.get_common_model_keys()
         for key in self.config.keys():
             if key=='debug':
@@ -340,12 +340,12 @@ class WorkflowModelObs(workflow.Workflow):
         # Update observation types if specified in config
         if 'use_these_obs' in self.config:
             print("  Processing observation types from config...")
-            rst_file_path = os.path.join(
+            obs_def_file_dir = os.path.join(
                 self.config['perfect_model_obs_dir'],
-                '../../../observations/forward_operators/obs_def_ocean_mod.rst'
+                '../../../observations/forward_operators/'
             )
             try:
-                obs_types_tuple = self.model_adapter.parse_dart_obs_type(rst_file_path)
+                obs_types_tuple = self.model_adapter.parse_dart_obs_type(obs_def_file_dir)
                 expanded_obs_types = config_utils.validate_and_expand_obs_types(
                     self.config['use_these_obs'], obs_types_tuple
                 )

@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from collections.abc import Iterator
+import os
 
 import dask.dataframe as dd
 import numpy as np
@@ -178,14 +179,18 @@ class ModelAdapter(ABC):
         return False
 
     
-    def parse_dart_obs_type(self, rst_file_path: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
-        """Select parser depending on model (currently ocean only)"""
+    def parse_dart_obs_type(self, obs_def_file_dir: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
+        """Select parser depending on model (currently ocean and sea-ice only)"""
 
         if self.is_ocean:
-            return config_utils.parse_obs_def_ocean_mod(rst_file_path)
+            return config_utils.parse_obs_def_model_mod(
+                os.path.join(obs_def_file_dir, "obs_def_ocean_mod.rst")
+            )
 
         if self.is_sea_ice:
-            return config_utils.parse_obs_def_cice_mod(rst_file_path)
+            return config_utils.parse_obs_def_model_mod(
+                os.path.join(obs_def_file_dir, "obs_def_cice_mod.f90")
+            )
 
         raise NotImplementedError(
             "Only ocean and sea ice models are currently supported"
