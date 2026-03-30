@@ -41,9 +41,14 @@ class ModelAdapterCICE(ModelAdapter):
             List of required configuration key names
         """
     
-        raise ValueError(
-            "not implemented for CICE yet"
-        )
+        return [
+            'model_files_folder', 
+            'obs_seq_in_folder', 
+            'output_folder',
+            'cice_filename',
+            'perfect_model_obs_dir', 
+            'parquet_folder'
+       ]
     
     def get_common_model_keys(self) -> List[str]:
         """Return list of keys that are common to all input.nml files for this
@@ -54,16 +59,21 @@ class ModelAdapterCICE(ModelAdapter):
 
         """
 
-        raise ValueError(
-            "not implemented for CICE yet"
-        )
+        return [
+            'cice_filename',
+            'variables',
+        ]
 
     def validate_paths(self, config, run_opts) -> None:
         """Validate paths provided in config file."""
 
-        raise ValueError(
-            "not implemented for CICE yet"
-        )
+        super().validate_paths(config, run_opts)
+
+        # CICE specific validation
+        print("  Validating CICE model file...")
+        config_utils.check_nc_file(config['cice_filename'], "cice_filename")
+
+        return
 
     @contextmanager
     def open_dataset_ctx(self, path: str) -> Iterator[xr.Dataset]:
