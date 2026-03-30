@@ -58,12 +58,12 @@ class TestModelAdapterRegistry:
 
     def test_create_adapter_invalid_model(self):
         """Test creating adapter with invalid model name raises error."""
-        with pytest.raises(ValueError, match="Unknown ocean_model"):
+        with pytest.raises(ValueError, match="Unknown model_name"):
             create_model_adapter("invalid_model")
 
     def test_create_adapter_none_raises_error(self):
         """Test creating adapter with None raises error."""
-        with pytest.raises(ValueError, match="ocean_model is required"):
+        with pytest.raises(ValueError, match="model_name is required"):
             create_model_adapter(None)
 
     def test_create_adapter_whitespace_handling(self):
@@ -1107,7 +1107,7 @@ class TestParseDartObsType:
             mock_parser.assert_called_once_with('/path/to/obs_def_ocean_mod.rst')
             assert result == self._MOCK_RESULT
 
-    def test_parse_dart_obs_type_non_ocean_raises_not_implemented(self):
+    def test_parse_dart_obs_type_non_ocean_non_seaice_raises_not_implemented(self):
         """Test parse_dart_obs_type raises NotImplementedError when is_ocean is False.
 
         Given: An adapter with is_ocean set to False
@@ -1116,6 +1116,7 @@ class TestParseDartObsType:
         """
         adapter = ModelAdapterMOM6()
         adapter.is_ocean = False
+        adapter.is_sea_ice = False
         with pytest.raises(NotImplementedError):
             adapter.parse_dart_obs_type('/path/to/some.rst')
 

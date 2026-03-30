@@ -19,9 +19,9 @@ from model2obs.model_adapter.model_adapter_MOM6 import ModelAdapterMOM6
 
 @pytest.fixture
 def base_config(tmp_path):
-    """Provide base configuration dictionary with ocean_model for MOM6."""
+    """Provide base configuration dictionary with model_name for MOM6."""
     return {
-        'ocean_model': 'MOM6',
+        'model_name': 'MOM6',
         'model_files_folder': str(tmp_path / 'model'),
         'obs_seq_in_folder': str(tmp_path / 'obs'),
         'output_folder': str(tmp_path / 'output'),
@@ -35,9 +35,9 @@ def base_config(tmp_path):
 
 @pytest.fixture
 def roms_rutgers_config(tmp_path):
-    """Provide base configuration dictionary with ocean_model for ROMS_RUTGERS."""
+    """Provide base configuration dictionary with model_name for ROMS_RUTGERS."""
     return {
-        'ocean_model': 'ROMS_RUTGERS',
+        'model_name': 'ROMS_RUTGERS',
         'model_files_folder': str(tmp_path / 'model'),
         'obs_seq_in_folder': str(tmp_path / 'obs'),
         'output_folder': str(tmp_path / 'output'),
@@ -197,7 +197,7 @@ class TestProcessFiles:
     def test_process_files_checks_perfect_model_obs_dir(self, tmp_path):
         """Test process_files checks for perfect_model_obs_dir in config."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path / 'model'),
             'obs_seq_in_folder': str(tmp_path / 'obs'),
             'output_folder': str(tmp_path / 'output'),
@@ -226,7 +226,7 @@ class TestProcessFiles:
                                            tmp_path):
         """Test process_files with no_matching=True processes files in pairs."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path / 'model'),
             'obs_seq_in_folder': str(tmp_path / 'obs'),
             'output_folder': str(tmp_path / 'output'),
@@ -258,7 +258,7 @@ class TestPrintWorkflowConfig:
     def test_print_workflow_config_basic(self, tmp_path, capsys):
         """Test _print_workflow_config prints all configuration values."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': '/path/to/model',
             'obs_seq_in_folder': '/path/to/obs',
             'output_folder': '/path/to/output',
@@ -286,7 +286,7 @@ class TestPrintWorkflowConfig:
     def test_print_workflow_config_with_trim_obs(self, tmp_path, capsys):
         """Test _print_workflow_config includes trimmed_obs_folder when trim_obs=True."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -325,7 +325,7 @@ class TestInitializeModelNamelist:
     def test_initialize_model_namelist_basic_params(self, mock_namelist_class, tmp_path):
         """Test _initialize_model_namelist sets basic namelist parameters."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -357,7 +357,7 @@ class TestInitializeModelNamelist:
                                                      tmp_path, capsys):
         """Test _initialize_model_namelist processes use_these_obs config."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -387,7 +387,7 @@ class TestInitializeModelNamelist:
                                                                 mock_validate_obs, tmp_path, capsys):
         """Test _initialize_model_namelist handles obs_types validation errors."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -541,7 +541,7 @@ class TestProcessModelObsPair:
         for d in ['output', 'trimmed', 'bck', 'dart', 'tmp']:
             (tmp_path / d).mkdir(exist_ok=True)
         return {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path / 'output'),
@@ -774,7 +774,7 @@ class TestWritePairSummaryLog:
     def _make_workflow(self, tmp_path):
         (tmp_path / "output").mkdir(exist_ok=True)
         return WorkflowModelObs({
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path / 'output'),
@@ -931,7 +931,7 @@ class TestValidateModelFileTimestamps:
 
     def _make_workflow(self, tmp_path):
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -984,7 +984,7 @@ class TestProcessModelFileWorker:
         for d in ['output', 'bck', 'dart', 'tmp']:
             (tmp_path / d).mkdir(exist_ok=True)
         return {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path / 'output'),
@@ -1209,7 +1209,7 @@ class TestPrecomputeTimeMatching:
         for d in ['output', 'bck', 'dart', 'tmp']:
             (tmp_path / d).mkdir(exist_ok=True)
         return {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path / 'output'),
@@ -1335,7 +1335,7 @@ class TestParallelDispatch:
         for d in ['model', 'obs', 'output', 'bck', 'dart', 'tmp', 'parquet']:
             (tmp_path / d).mkdir(exist_ok=True)
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path / 'model'),
             'obs_seq_in_folder': str(tmp_path / 'obs'),
             'output_folder': str(tmp_path / 'output'),

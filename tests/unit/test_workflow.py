@@ -36,7 +36,7 @@ class TestWorkflowInit:
     def test_init_with_valid_config_real_adapter(self):
         """Integration test: initialization with real MOM6 adapter."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': './model/',
             'obs_seq_in_folder': './obs',
             'trimmed_obs_folder': './trimmed_obs',
@@ -56,7 +56,7 @@ class TestWorkflowInit:
     
     def test_init_with_valid_config_mocked(self, mock_model_adapter):
         """Test initialization stores configuration correctly."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -68,26 +68,26 @@ class TestWorkflowInit:
         """Test that initialization validates required keys."""
         config = {
             'key1': 'value1',
-            'ocean_model': 'MOM6'
+            'model_name': 'MOM6'
         }
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(KeyError, match="Required keys missing from config"):
                 ConcreteWorkflow(config)
     
-    def test_init_validates_ocean_model(self):
-        """Test that initialization validates ocean_model key."""
+    def test_init_validates_model_name(self):
+        """Test that initialization validates model_name key."""
         config = {
             'key1': 'value1',
         }
         
-        with pytest.raises(ValueError, match="ocean_model is required"):
+        with pytest.raises(ValueError, match="model_name is required"):
             ConcreteWorkflow(config)
     
     def test_init_with_empty_config(self):
         """Test initialization when no keys are provided."""
         config = {}
-        with pytest.raises(ValueError, match="ocean_model is required"):
+        with pytest.raises(ValueError, match="model_name is required"):
             ConcreteWorkflow(config)
 
 
@@ -98,7 +98,7 @@ class TestWorkflowFromConfigFile:
         """Integration test: loading workflow from YAML with real adapter."""
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""
-ocean_model: MOM6
+model_name: MOM6
 model_files_folder: ./model/
 obs_seq_in_folder: ./obs
 output_folder: ./output_folder 
@@ -128,16 +128,16 @@ time_window:
         workflow = ConcreteWorkflow.from_config_file(str(config_file))
 
         for k in workflow.config:
-            if k not in ["ocean_model", "time_window"]:
+            if k not in ["model_name", "time_window"]:
                 assert workflow.get_config(k) == str(tmp_path)+"/"+target_paths[k]
-        assert workflow.get_config("ocean_model") == "MOM6"
+        assert workflow.get_config("model_name") == "MOM6"
         assert workflow.get_config("time_window") == target_time
     
     def test_from_config_file_validates_required_keys(self, tmp_path, mock_model_adapter):
         """Test that loading from file validates required keys."""
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""
-ocean_model: MOM6
+model_name: MOM6
 key1: value1
 time_window:
   days: 1
@@ -151,7 +151,7 @@ time_window:
         """Test that kwargs override config file values."""
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""
-ocean_model: MOM6
+model_name: MOM6
 key1: value1
 key2: value2
 parquet_folder: original
@@ -172,7 +172,7 @@ time_window:
         """Test that kwargs can add new configuration keys."""
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""
-ocean_model: MOM6
+model_name: MOM6
 key1: value1
 key2: value2
 time_window:
@@ -210,7 +210,7 @@ class TestWorkflowConfigMethods:
     
     def test_get_config_existing_key(self, mock_model_adapter):
         """Test getting existing configuration value."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -218,7 +218,7 @@ class TestWorkflowConfigMethods:
     
     def test_get_config_missing_key_with_default(self, mock_model_adapter):
         """Test getting missing key returns default value."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -226,7 +226,7 @@ class TestWorkflowConfigMethods:
     
     def test_get_config_missing_key_no_default(self, mock_model_adapter):
         """Test getting missing key without default returns None."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -234,7 +234,7 @@ class TestWorkflowConfigMethods:
     
     def test_set_config_new_key(self, mock_model_adapter):
         """Test setting new configuration key."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -245,7 +245,7 @@ class TestWorkflowConfigMethods:
     
     def test_set_config_existing_key(self, mock_model_adapter):
         """Test overwriting existing configuration key."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -255,7 +255,7 @@ class TestWorkflowConfigMethods:
     
     def test_set_config_various_types(self, mock_model_adapter):
         """Test setting configuration values of various types."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -275,7 +275,7 @@ class TestWorkflowRun:
     
     def test_run_executes(self, mock_model_adapter):
         """Test that run method executes."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -292,7 +292,7 @@ class TestWorkflowAbstractMethods:
         class IncompleteWorkflow(Workflow):
             pass
         
-        config = {'ocean_model': 'MOM6'}
+        config = {'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(TypeError, match="Can't instantiate abstract class"):
@@ -304,7 +304,7 @@ class TestWorkflowPrintConfig:
     
     def test_print_config_output(self, capsys, mock_model_adapter):
         """Test that print_config displays configuration."""
-        config = {'key1': 'value1', 'key2': 'value2', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -318,7 +318,7 @@ class TestWorkflowPrintConfig:
     def test_print_config_empty(self, capsys, mock_model_adapter):
         """Test print_config with empty configuration."""
         mock_model_adapter.get_required_config_keys.return_value = []
-        config = {'ocean_model': 'MOM6'}
+        config = {'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -333,7 +333,7 @@ class TestWorkflowValidation:
     
     def test_validate_config_called_on_init(self, mock_model_adapter):
         """Test that _validate_config is called during initialization."""
-        config = {'key1': 'value1', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(KeyError, match="Required keys missing from config"):
@@ -341,7 +341,7 @@ class TestWorkflowValidation:
     
     def test_validate_config_with_all_required_keys(self, mock_model_adapter):
         """Test validation passes with all required keys present."""
-        config = {'key1': 'value1', 'key2': 'value2', 'extra': 'allowed', 'ocean_model': 'MOM6'}
+        config = {'key1': 'value1', 'key2': 'value2', 'extra': 'allowed', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             workflow = ConcreteWorkflow(config)
@@ -349,7 +349,7 @@ class TestWorkflowValidation:
     
     def test_validate_config_multiple_missing_keys(self, mock_model_adapter):
         """Test validation error message with multiple missing keys."""
-        config = {'key3': 'value3', 'ocean_model': 'MOM6'}
+        config = {'key3': 'value3', 'model_name': 'MOM6'}
         
         with patch('model2obs.workflows.workflow.create_model_adapter', return_value=mock_model_adapter):
             with pytest.raises(KeyError) as excinfo:

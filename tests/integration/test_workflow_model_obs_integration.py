@@ -76,7 +76,7 @@ def workflow_config(tmp_path):
         obs_def_file.write_text("FLOAT_TEMPERATURE\nFLOAT_SALINITY\n")
         
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(model_files),
             'obs_seq_in_folder': str(obs_in),
             'output_folder': str(output),
@@ -152,7 +152,7 @@ class TestWorkflowModelObsInitialization:
         """Test that initialization validates required keys."""
         from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
-        incomplete_config = {'ocean_model': 'MOM6', 'model_files_folder': '/path'}
+        incomplete_config = {'model_name': 'MOM6', 'model_files_folder': '/path'}
         
         with pytest.raises(KeyError, match="Required keys missing"):
             WorkflowModelObs(incomplete_config)
