@@ -25,7 +25,7 @@ from typing import Any, Dict, List
 from unittest.mock import patch, mock_open
 import xarray as xr
 
-from model2obs.model_adapter.model_adapter import ModelAdapter
+from model2obs.model_adapter.model_adapter import ModelAdapter, ModelAdapterCapabilities
 from model2obs.model_adapter.model_adapter_MOM6 import ModelAdapterMOM6
 from model2obs.model_adapter.model_adapter_ROMS_Rutgers import ModelAdapterROMSRutgers
 from model2obs.model_adapter.model_adapter_CICE import ModelAdapterCICE
@@ -804,8 +804,6 @@ class TestModelAdapterPathValidation:
         """
         adapter = object.__new__(ModelAdapterCICE)
         adapter.model_name = "CICE"
-        adapter.is_sea_ice = True
-        adapter.is_ocean = False
         adapter.time_varname = None
         adapter.capabilities = ModelAdapterCICE.capabilities
 
@@ -841,8 +839,6 @@ class TestModelAdapterPathValidation:
         """
         adapter = object.__new__(ModelAdapterCICE)
         adapter.model_name = "CICE"
-        adapter.is_sea_ice = True
-        adapter.is_ocean = False
         adapter.time_varname = None
         adapter.capabilities = ModelAdapterCICE.capabilities
 
@@ -876,8 +872,6 @@ class TestModelAdapterPathValidation:
         """
         adapter = object.__new__(ModelAdapterCICE)
         adapter.model_name = "CICE"
-        adapter.is_sea_ice = True
-        adapter.is_ocean = False
         adapter.time_varname = None
         adapter.capabilities = ModelAdapterCICE.capabilities
 
@@ -1139,8 +1133,6 @@ class TestModelAdapterCICE:
         """Return a ModelAdapterCICE instance with __init__ bypassed."""
         adapter = object.__new__(ModelAdapterCICE)
         adapter.model_name = "CICE"
-        adapter.is_sea_ice = True
-        adapter.is_ocean = False
         adapter.time_varname = None
         return adapter
 
@@ -1329,17 +1321,24 @@ class TestParseDartObsType:
             assert result == self._MOCK_RESULT
 
     def test_parse_dart_obs_type_non_ocean_non_seaice_raises_not_implemented(self):
-        """Test parse_dart_obs_type raises NotImplementedError when is_ocean is False.
+        """Test parse_dart_obs_type raises NotImplementedError for an adapter with no model type.
 
-        Given: An adapter with is_ocean set to False
+        Given: An adapter whose capabilities have is_ocean=False and is_sea_ice=False
         When: parse_dart_obs_type() is called
         Then: NotImplementedError is raised
         """
-        adapter = ModelAdapterMOM6()
-        adapter.is_ocean = False
-        adapter.is_sea_ice = False
+        class _NeutralAdapter(ModelAdapterMOM6):
+            capabilities = ModelAdapterCapabilities(
+                supports_trim_obs=True,
+                supports_no_matching=True,
+                supports_force_obs_time=True,
+                is_ocean=False,
+                is_sea_ice=False,
+            )
+
+        adapter = object.__new__(_NeutralAdapter)
         with pytest.raises(NotImplementedError):
-            adapter.parse_dart_obs_type('/path/to/some.rst')
+            adapter.parse_dart_obs_type('/path/to/')
 
     def test_parse_dart_obs_type_with_valid_rst_file(self, fixtures_root: Path, tmp_path: Path):
         """Test parse_dart_obs_type returns correct dicts for an ocean adapter.
@@ -1379,9 +1378,7 @@ class TestParseDartObsType:
         Then: config_utils.parse_obs_def_model_mod is called with obs_def_cice_mod.f90
               appended to the directory, and its return value is returned unchanged
         """
-        adapter = ModelAdapterMOM6()
-        adapter.is_ocean = False
-        adapter.is_sea_ice = True
+        adapter = ModelAdapterCICE()
         with patch(self._MOCK_PARSE_TARGET, return_value=self._MOCK_RESULT) as mock_parser:
             result = adapter.parse_dart_obs_type('/path/to/')
             mock_parser.assert_called_once_with('/path/to/obs_def_cice_mod.f90')
@@ -1399,9 +1396,7 @@ class TestParseDartObsType:
             fixtures_root / "mock_obs_def_cice_mod.f90",
             tmp_path / "obs_def_cice_mod.f90"
         )
-        adapter = ModelAdapterMOM6()
-        adapter.is_ocean = False
-        adapter.is_sea_ice = True
+        adapter = ModelAdapterCICE()
         obs_type_to_qty, qty_to_obs_types = adapter.parse_dart_obs_type(str(tmp_path))
 
         assert isinstance(obs_type_to_qty, dict)

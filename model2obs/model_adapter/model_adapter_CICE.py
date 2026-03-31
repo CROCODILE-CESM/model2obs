@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import xarray as xr
+import warnings
 
 from . import ModelAdapter, ModelAdapterCapabilities
 from ..utils import config as config_utils
@@ -18,18 +19,17 @@ class ModelAdapterCICE(ModelAdapter):
     capabilities = ModelAdapterCapabilities(
         supports_trim_obs = False,
         supports_no_matching = True,
-        supports_force_obs_time = True
+        supports_force_obs_time = True,
+        is_sea_ice = True
     )
 
     def __init__(self) -> None:
 
         # Assign ocean model name
         self.model_name = "CICE"
-        # Toggle ocean model output
-        self.is_sea_ice = True
         # Assign time_variable_name
         self.time_varname = None
-        raise ValueError(
+        warnings.warn(
             "time_varname not defined for CICE yet"
         )
         return

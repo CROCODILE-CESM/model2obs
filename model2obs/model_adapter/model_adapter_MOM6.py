@@ -20,15 +20,14 @@ class ModelAdapterMOM6(ModelAdapter):
     capabilities = ModelAdapterCapabilities(
         supports_trim_obs = True,
         supports_no_matching = True,
-        supports_force_obs_time = True
+        supports_force_obs_time = True,
+        is_ocean = True
     )
 
     def __init__(self) -> None:
 
         # Assign ocean model name
         self.model_name = "MOM6"
-        # Toggle ocean model output
-        self.is_ocean = True
         # Assign time_variable_name
         self.time_varname = "time"
         return

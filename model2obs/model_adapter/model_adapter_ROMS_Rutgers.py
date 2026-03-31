@@ -18,15 +18,14 @@ class ModelAdapterROMSRutgers(ModelAdapter):
     capabilities = ModelAdapterCapabilities(
         supports_trim_obs = False,
         supports_no_matching = False,
-        supports_force_obs_time = False
+        supports_force_obs_time = False,
+        is_ocean = True
     )
 
     def __init__(self) -> None:
 
         # Assign ocean model name
         self.model_name = "ROMS_Rutgers"
-        # Toggle ocean model output
-        self.is_ocean = True
         # Assign time_varname_name
         self.time_varname = "ocean_time"
         return

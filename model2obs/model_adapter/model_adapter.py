@@ -44,8 +44,6 @@ class ModelAdapter(ABC):
         method to set:
         - self.model_name: Name of the ocean model (str)
         - self.time_varname: Name of the time variable in model files (str)
-        - self.is_ocean: Toggle for ocean model output (bool)
-        - self.is_sea_ice: Toggle for sea ice model output (bool)
         """
         pass  # Subclasses must implement
 
@@ -182,12 +180,12 @@ class ModelAdapter(ABC):
     def parse_dart_obs_type(self, obs_def_file_dir: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
         """Select parser depending on model (currently ocean and sea-ice only)"""
 
-        if self.is_ocean:
+        if self.capabilities.is_ocean:
             return config_utils.parse_obs_def_model_mod(
                 os.path.join(obs_def_file_dir, "obs_def_ocean_mod.rst")
             )
 
-        if self.is_sea_ice:
+        if self.capabilities.is_sea_ice:
             return config_utils.parse_obs_def_model_mod(
                 os.path.join(obs_def_file_dir, "obs_def_cice_mod.f90")
             )
