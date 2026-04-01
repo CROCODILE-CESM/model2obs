@@ -3,7 +3,7 @@
 # ==========================================
 
 # Ocean model used to generate files (MOM6 or ROMS_rutgers)
-ocean_model: ROMS_rutgers
+model_name: ROMS_rutgers
 
 ####### INPUT FILES #######
 # Directory containing model .nc files to process

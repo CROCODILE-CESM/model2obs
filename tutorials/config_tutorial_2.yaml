@@ -9,6 +9,10 @@
 # NOTE: Paths below are pre-configured for NCAR HPC systems (Casper/Derecho).
 # If running elsewhere, you will need to adjust these paths to your local setup.
 
+# Ocean model to use (required)
+# Supported values: MOM6, ROMS_Rutgers
+model_name: MOM6
+
 ####### INPUT FILES #######
 # Directory containing model .nc files to process
 model_files_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6/
