@@ -62,6 +62,21 @@ class ModelAdapterCICE(ModelAdapter):
             'model_state_variables',
         ]
 
+    def get_extra_model_keys(self) -> Dict[str, Any]:
+        """Return list of keys that are required in model nml in input.nml for
+        perfect_model_obs to run, but that have a static, inconsequential value
+        
+        Returns:
+            Dict of extra required keys
+
+        """
+
+        extra_keys = {}
+        extra_keys["model_perturbation_amplitude"] = 0.00002
+        extra_keys["binary_grid_file_format"] = 'big_endian'
+        extra_keys["debug"] = 1
+        return extra_keys
+
     def validate_paths(self, config, run_opts) -> None:
         """Validate paths provided in config file."""
 

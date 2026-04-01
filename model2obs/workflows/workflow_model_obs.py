@@ -328,15 +328,30 @@ class WorkflowModelObs(workflow.Workflow):
                     "model_nml", key, self.config[key], dict_format='quintuplet'
                 )
             elif key == 'model_state_variables':
-                # MOM6 5-field format: 'var', 'QTY', 'NA', 'NA', 'UPDATE'
-                self._namelist.update_namelist_param(
-                    "model_nml", key, self.config[key], dict_format='quintuplet'
-                )
+                if self.model_adapter.model_name == "MOM6":
+                    # MOM6 5-field format: 'var', 'QTY', 'NA', 'NA', 'UPDATE'
+                    self._namelist.update_namelist_param(
+                        "model_nml", key, self.config[key], dict_format='quintuplet'
+                    )
+                if self.model_adapter.model_name == "CICE":
+                    # CICE 3-field format: 'var', 'QTY', 'UPDATE'
+                    self._namelist.update_namelist_param(
+                        "model_nml", key, self.config[key], dict_format='triplet'
+                    )
             elif key in common_model_keys:
                 self._namelist.update_namelist_param(
                     "model_nml", key, self.config[key]
                 )
 
+        # CICE needs specific fields
+        if self.model_adapter.model_name == "CICE":
+            extra_keys =  self.model_adapter.get_extra_model_keys()
+            for key in extra_keys:
+                type_str = isinstance(extra_keys[key], str)
+                self._namelist.update_namelist_param(
+                    "model_nml", key, extra_keys[key], string = type_str
+                )
+            
         # Update observation types if specified in config
         if 'use_these_obs' in self.config:
             print("  Processing observation types from config...")
