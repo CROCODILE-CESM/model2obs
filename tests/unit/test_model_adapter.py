@@ -1210,6 +1210,52 @@ class TestModelAdapterCICE:
         with pytest.raises(ValueError, match="not implemented for CICE yet"):
             adapter.convert_units(pd.DataFrame())
 
+    def test_get_extra_model_keys_returns_dict(self):
+        """Test get_extra_model_keys returns a dict.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_extra_model_keys() is called
+        Then: The return value is a dict
+        """
+        adapter = self._make_cice_adapter()
+        result = adapter.get_extra_model_keys()
+        assert isinstance(result, dict)
+
+    def test_get_extra_model_keys_contains_required_keys(self):
+        """Test get_extra_model_keys returns all three required CICE keys.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_extra_model_keys() is called
+        Then: The dict contains model_perturbation_amplitude, binary_grid_file_format, debug
+        """
+        adapter = self._make_cice_adapter()
+        result = adapter.get_extra_model_keys()
+        assert "model_perturbation_amplitude" in result
+        assert "binary_grid_file_format" in result
+        assert "debug" in result
+
+    def test_get_extra_model_keys_float_value(self):
+        """Test model_perturbation_amplitude is a float.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_extra_model_keys() is called
+        Then: model_perturbation_amplitude is a float (so Fortran namelist gets fixed-point formatting)
+        """
+        adapter = self._make_cice_adapter()
+        result = adapter.get_extra_model_keys()
+        assert isinstance(result["model_perturbation_amplitude"], float)
+
+    def test_get_extra_model_keys_string_value(self):
+        """Test binary_grid_file_format is a str.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_extra_model_keys() is called
+        Then: binary_grid_file_format is a str (so it gets written with quotes in the namelist)
+        """
+        adapter = self._make_cice_adapter()
+        result = adapter.get_extra_model_keys()
+        assert isinstance(result["binary_grid_file_format"], str)
+
 
 class TestGetModelTimeInDaysSeconds:
     """Test suite for get_model_time_in_days_seconds() function."""
