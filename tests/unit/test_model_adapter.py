@@ -1171,7 +1171,6 @@ class TestModelAdapterCICE:
         assert 'model_files_folder' in keys
         assert 'obs_seq_in_folder' in keys
         assert 'output_folder' in keys
-        assert 'cice_filename' in keys
         assert 'perfect_model_obs_dir' in keys
         assert 'parquet_folder' in keys
 
@@ -1185,7 +1184,6 @@ class TestModelAdapterCICE:
         adapter = self._make_cice_adapter()
         keys = adapter.get_common_model_keys()
 
-        assert 'cice_filename' in keys
         assert 'variables' in keys
 
     def test_open_dataset_ctx_raises_value_error(self):

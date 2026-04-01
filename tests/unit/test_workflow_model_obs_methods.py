@@ -418,7 +418,7 @@ class TestPreviewNamelist:
     def _make_workflow_with_namelist(self, tmp_path, content: str = "nml content"):
         """Return a WorkflowModelObs with a pre-set mock _namelist."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -483,7 +483,7 @@ class TestPreviewNamelist:
         Then: _initialize_model_namelist is called to initialize the namelist
         """
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
