@@ -68,7 +68,7 @@ time_window:
 # CICE variable naming and type
 # For each variable, follow the logic:
 #   <varname in nc file>: <DART quantity type> 
-variables:
+model_state_variables:
   salt: QTY_SALINITY
   temp: QTY_TEMPERATURE
   zeta: QTY_SEA_SURFACE_HEIGHT

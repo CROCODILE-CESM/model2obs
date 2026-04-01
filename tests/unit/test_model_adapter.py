@@ -1184,7 +1184,7 @@ class TestModelAdapterCICE:
         adapter = self._make_cice_adapter()
         keys = adapter.get_common_model_keys()
 
-        assert 'variables' in keys
+        assert 'model_state_variables' in keys
 
     def test_open_dataset_ctx_raises_value_error(self):
         """Test open_dataset_ctx raises ValueError (not yet implemented).

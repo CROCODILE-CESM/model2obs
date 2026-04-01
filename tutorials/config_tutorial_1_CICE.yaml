@@ -63,7 +63,7 @@ time_window:
 # CICE variable naming and type
 # For each variable, follow the logic:
 #   <varname in nc file>: <DART quantity type> 
-variables:
+model_state_variables:
   aicen: QTY_SEAICE_CONCENTR
   vicen: QTY_SEAICE_VOLUME
   vsnon: QTY_SEAICE_SNOWVOLUME 

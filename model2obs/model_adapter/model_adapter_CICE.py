@@ -59,7 +59,7 @@ class ModelAdapterCICE(ModelAdapter):
         """
 
         return [
-            'variables',
+            'model_state_variables',
         ]
 
     def validate_paths(self, config, run_opts) -> None:
