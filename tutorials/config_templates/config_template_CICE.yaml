@@ -17,7 +17,7 @@ model_files_folder: /path/to/model_files/
 
 # Model configuration files (all must be .nc files from your model simulation)
 # cice_filename: Any one of your model output files (used to read grid structure and time info)
-cice_filename: /path/to/roms_filename
+cice_filename: /path/to/cice_filename
 
 # Directory containing observation files in DART observation sequence format
 obs_seq_in_folder: /path/to/obs/

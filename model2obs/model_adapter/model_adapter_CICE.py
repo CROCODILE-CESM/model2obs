@@ -45,7 +45,6 @@ class ModelAdapterCICE(ModelAdapter):
             'model_files_folder', 
             'obs_seq_in_folder', 
             'output_folder',
-            'cice_filename',
             'perfect_model_obs_dir', 
             'parquet_folder'
        ]
@@ -60,7 +59,6 @@ class ModelAdapterCICE(ModelAdapter):
         """
 
         return [
-            'cice_filename',
             'variables',
         ]
 
