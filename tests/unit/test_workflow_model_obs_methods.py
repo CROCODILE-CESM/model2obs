@@ -19,9 +19,9 @@ from model2obs.model_adapter.model_adapter_MOM6 import ModelAdapterMOM6
 
 @pytest.fixture
 def base_config(tmp_path):
-    """Provide base configuration dictionary with ocean_model for MOM6."""
+    """Provide base configuration dictionary with model_name for MOM6."""
     return {
-        'ocean_model': 'MOM6',
+        'model_name': 'MOM6',
         'model_files_folder': str(tmp_path / 'model'),
         'obs_seq_in_folder': str(tmp_path / 'obs'),
         'output_folder': str(tmp_path / 'output'),
@@ -35,9 +35,9 @@ def base_config(tmp_path):
 
 @pytest.fixture
 def roms_rutgers_config(tmp_path):
-    """Provide base configuration dictionary with ocean_model for ROMS_RUTGERS."""
+    """Provide base configuration dictionary with model_name for ROMS_RUTGERS."""
     return {
-        'ocean_model': 'ROMS_RUTGERS',
+        'model_name': 'ROMS_RUTGERS',
         'model_files_folder': str(tmp_path / 'model'),
         'obs_seq_in_folder': str(tmp_path / 'obs'),
         'output_folder': str(tmp_path / 'output'),
@@ -197,7 +197,7 @@ class TestProcessFiles:
     def test_process_files_checks_perfect_model_obs_dir(self, tmp_path):
         """Test process_files checks for perfect_model_obs_dir in config."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path / 'model'),
             'obs_seq_in_folder': str(tmp_path / 'obs'),
             'output_folder': str(tmp_path / 'output'),
@@ -226,7 +226,7 @@ class TestProcessFiles:
                                            tmp_path):
         """Test process_files with no_matching=True processes files in pairs."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path / 'model'),
             'obs_seq_in_folder': str(tmp_path / 'obs'),
             'output_folder': str(tmp_path / 'output'),
@@ -258,7 +258,7 @@ class TestPrintWorkflowConfig:
     def test_print_workflow_config_basic(self, tmp_path, capsys):
         """Test _print_workflow_config prints all configuration values."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': '/path/to/model',
             'obs_seq_in_folder': '/path/to/obs',
             'output_folder': '/path/to/output',
@@ -286,7 +286,7 @@ class TestPrintWorkflowConfig:
     def test_print_workflow_config_with_trim_obs(self, tmp_path, capsys):
         """Test _print_workflow_config includes trimmed_obs_folder when trim_obs=True."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -325,7 +325,7 @@ class TestInitializeModelNamelist:
     def test_initialize_model_namelist_basic_params(self, mock_namelist_class, tmp_path):
         """Test _initialize_model_namelist sets basic namelist parameters."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -357,7 +357,7 @@ class TestInitializeModelNamelist:
                                                      tmp_path, capsys):
         """Test _initialize_model_namelist processes use_these_obs config."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -387,7 +387,7 @@ class TestInitializeModelNamelist:
                                                                 mock_validate_obs, tmp_path, capsys):
         """Test _initialize_model_namelist handles obs_types validation errors."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -411,6 +411,96 @@ class TestInitializeModelNamelist:
         assert "Warning: Could not process observation types" in captured.out
         assert "Continuing with existing obs_kind_nml" in captured.out
 
+    @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist')
+    @patch('model2obs.workflows.workflow.create_model_adapter')
+    def test_initialize_model_namelist_cice_extra_keys(
+            self, mock_create_adapter, mock_namelist_class, tmp_path):
+        """Test _initialize_model_namelist calls update_namelist_param for each CICE extra key.
+
+        Given: A workflow configured for CICE with a mock adapter that returns 3 extra keys
+        When: _initialize_model_namelist() is called
+        Then: update_namelist_param is called for each extra key with the correct value and
+              string flag derived from the value type
+        """
+        mock_adapter = Mock()
+        mock_adapter.model_name = "CICE"
+        mock_adapter.capabilities.is_ocean = False
+        mock_adapter.capabilities.is_sea_ice = True
+        mock_adapter.get_required_config_keys.return_value = []
+        mock_adapter.get_common_model_keys.return_value = []
+        mock_adapter.get_extra_model_keys.return_value = {
+            "model_perturbation_amplitude": 0.00002,
+            "binary_grid_file_format": "big_endian",
+            "debug": 1,
+        }
+        mock_create_adapter.return_value = mock_adapter
+
+        config = {
+            'model_name': 'CICE',
+            'model_files_folder': str(tmp_path),
+            'obs_seq_in_folder': str(tmp_path),
+            'output_folder': str(tmp_path),
+            'perfect_model_obs_dir': str(tmp_path),
+            'parquet_folder': str(tmp_path),
+            'time_window': {'days': 1, 'seconds': 0},
+        }
+
+        mock_nml = Mock()
+        mock_namelist_class.return_value = mock_nml
+
+        workflow = WorkflowModelObs(config)
+        workflow._initialize_model_namelist()
+
+        mock_adapter.get_extra_model_keys.assert_called_once()
+
+        extra_calls = [
+            call("model_nml", "model_perturbation_amplitude", 0.00002, string=False),
+            call("model_nml", "binary_grid_file_format", "big_endian", string=True),
+            call("model_nml", "debug", 1, string=False),
+        ]
+        for c in extra_calls:
+            assert c in mock_nml.update_namelist_param.call_args_list
+
+    @patch('model2obs.workflows.workflow_model_obs.namelist.Namelist')
+    def test_initialize_model_namelist_non_cice_skips_extra_keys(
+            self, mock_namelist_class, tmp_path):
+        """Test _initialize_model_namelist does not call get_extra_model_keys for non-CICE adapters.
+
+        Given: A workflow configured for MOM6
+        When: _initialize_model_namelist() is called
+        Then: get_extra_model_keys is never called on the adapter
+        """
+        config = {
+            'model_name': 'MOM6',
+            'model_files_folder': str(tmp_path),
+            'obs_seq_in_folder': str(tmp_path),
+            'output_folder': str(tmp_path),
+            'template_file': 'template.nc',
+            'static_file': 'static.nc',
+            'ocean_geometry': 'ocean.nc',
+            'perfect_model_obs_dir': str(tmp_path),
+            'parquet_folder': str(tmp_path),
+            'time_window': {'days': 1, 'seconds': 0},
+        }
+
+        mock_nml = Mock()
+        mock_namelist_class.return_value = mock_nml
+
+        workflow = WorkflowModelObs(config)
+        assert not hasattr(workflow.model_adapter, 'get_extra_model_keys') or \
+               workflow.model_adapter.model_name != "CICE"
+
+        workflow._initialize_model_namelist()
+
+        # Verify no extra-key calls were made (only standard model_nml keys expected)
+        extra_key_calls = [
+            c for c in mock_nml.update_namelist_param.call_args_list
+            if len(c.args) >= 2 and c.args[1] in (
+                "model_perturbation_amplitude", "binary_grid_file_format", "debug"
+            )
+        ]
+        assert extra_key_calls == []
+
 
 class TestPreviewNamelist:
     """Tests for preview_namelist() method."""
@@ -418,7 +508,7 @@ class TestPreviewNamelist:
     def _make_workflow_with_namelist(self, tmp_path, content: str = "nml content"):
         """Return a WorkflowModelObs with a pre-set mock _namelist."""
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -483,7 +573,7 @@ class TestPreviewNamelist:
         Then: _initialize_model_namelist is called to initialize the namelist
         """
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -541,7 +631,7 @@ class TestProcessModelObsPair:
         for d in ['output', 'trimmed', 'bck', 'dart', 'tmp']:
             (tmp_path / d).mkdir(exist_ok=True)
         return {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path / 'output'),
@@ -774,7 +864,7 @@ class TestWritePairSummaryLog:
     def _make_workflow(self, tmp_path):
         (tmp_path / "output").mkdir(exist_ok=True)
         return WorkflowModelObs({
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path / 'output'),
@@ -931,7 +1021,7 @@ class TestValidateModelFileTimestamps:
 
     def _make_workflow(self, tmp_path):
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path),
@@ -984,7 +1074,7 @@ class TestProcessModelFileWorker:
         for d in ['output', 'bck', 'dart', 'tmp']:
             (tmp_path / d).mkdir(exist_ok=True)
         return {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path / 'output'),
@@ -1209,7 +1299,7 @@ class TestPrecomputeTimeMatching:
         for d in ['output', 'bck', 'dart', 'tmp']:
             (tmp_path / d).mkdir(exist_ok=True)
         return {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path),
             'obs_seq_in_folder': str(tmp_path),
             'output_folder': str(tmp_path / 'output'),
@@ -1335,7 +1425,7 @@ class TestParallelDispatch:
         for d in ['model', 'obs', 'output', 'bck', 'dart', 'tmp', 'parquet']:
             (tmp_path / d).mkdir(exist_ok=True)
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path / 'model'),
             'obs_seq_in_folder': str(tmp_path / 'obs'),
             'output_folder': str(tmp_path / 'output'),

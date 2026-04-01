@@ -11,7 +11,7 @@
 
 # Ocean model to use (required)
 # Supported values: MOM6, ROMS_Rutgers
-ocean_model: MOM6
+model_name: MOM6
 
 ####### INPUT FILES #######
 # Directory containing model .nc files to process

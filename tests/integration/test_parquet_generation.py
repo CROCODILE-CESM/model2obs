@@ -54,7 +54,7 @@ class TestParquetStructure:
         
         # Setup workflow config
         config = {
-            'ocean_model': 'MOM6',
+            'model_name': 'MOM6',
             'model_files_folder': str(tmp_path / 'model'),
             'obs_seq_in_folder': str(tmp_path / 'obs_in'),
             'output_folder': str(tmp_path / 'output'),

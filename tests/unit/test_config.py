@@ -201,17 +201,33 @@ class TestResolvePath:
     
     def test_resolve_path_relative_without_reference(self):
         """Test resolve_path with relative path but no reference (uses CWD).
-        
+
         Given: A relative path and relative_to=None
         When: resolve_path() is called
         Then: Path is resolved relative to current working directory
         """
         relative_path = "model_files"
-        
+
         result = config.resolve_path(relative_path, relative_to=None)
-        
+
         assert os.path.isabs(result)
         assert result.endswith("model_files")
+
+    def test_resolve_config_paths_excludes_model_name(self, tmp_path: Path):
+        """Test that resolve_config_paths does not treat model_name as a file path.
+
+        Given: A config dict with model_name set to a bare model name (e.g. 'CICE')
+               and a reference file inside tmp_path
+        When: resolve_config_paths() is called
+        Then: model_name is unchanged (not resolved to an absolute path)
+        """
+        reference_file = tmp_path / "config.yaml"
+        reference_file.touch()
+        cfg = {"model_name": "CICE", "parquet_folder": "./parquet"}
+
+        result = config.resolve_config_paths(cfg, relative_to=str(reference_file))
+
+        assert result["model_name"] == "CICE"
 
 
 class TestConvertTimeWindow:
@@ -593,26 +609,28 @@ class TestClearFolder:
         config.clear_folder(str(nonexistent_dir))
 
 
-class TestParseObsDefOceanMod:
-    """Test suite for parse_obs_def_ocean_mod() function.
-    
-    Tests cover:
-    - Valid RST file parsing
+class TestParseObsDefModelMod:
+    """Test suite for parse_obs_def_model_mod() function.
+
+    Tests cover ocean and cice file formats:
+    - Valid file parsing for both formats
+    - Types with and without COMMON_CODE
+    - Multiple obs types sharing one QTY
     - Missing file handling
-    - Malformed RST file handling
+    - Malformed file handling
     - Empty type definitions section
     """
     
-    def test_parse_obs_def_ocean_mod_valid(self, fixtures_root: Path):
-        """Test parse_obs_def_ocean_mod parses valid RST file.
+    def test_parse_obs_def_model_mod_valid(self, fixtures_root: Path):
+        """Test parse_obs_def_model_mod parses valid RST file.
         
         Given: A valid DART obs_def_ocean_mod.rst file
-        When: parse_obs_def_ocean_mod() is called
+        When: parse_obs_def_model_mod() is called
         Then: Two dictionaries are returned with correct mappings
         """
         rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
         
-        obs_type_to_qty, qty_to_obs_types = config.parse_obs_def_ocean_mod(str(rst_file))
+        obs_type_to_qty, qty_to_obs_types = config.parse_obs_def_model_mod(str(rst_file))
         
         assert 'FLOAT_TEMPERATURE' in obs_type_to_qty
         assert obs_type_to_qty['FLOAT_TEMPERATURE'] == 'QTY_TEMPERATURE'
@@ -628,23 +646,23 @@ class TestParseObsDefOceanMod:
         assert 'FLOAT_SALINITY' in qty_to_obs_types['QTY_SALINITY']
         assert 'CTD_SALINITY' in qty_to_obs_types['QTY_SALINITY']
     
-    def test_parse_obs_def_ocean_mod_missing_file(self, tmp_path: Path):
-        """Test parse_obs_def_ocean_mod raises error for missing file.
+    def test_parse_obs_def_model_mod_missing_file(self, tmp_path: Path):
+        """Test parse_obs_def_model_mod raises error for missing file.
         
         Given: A path to a non-existent RST file
-        When: parse_obs_def_ocean_mod() is called
+        When: parse_obs_def_model_mod() is called
         Then: FileNotFoundError is raised
         """
         nonexistent_file = tmp_path / "missing.rst"
         
         with pytest.raises(FileNotFoundError, match="does not exist"):
-            config.parse_obs_def_ocean_mod(str(nonexistent_file))
+            config.parse_obs_def_model_mod(str(nonexistent_file))
     
-    def test_parse_obs_def_ocean_mod_no_type_definitions(self, tmp_path: Path):
-        """Test parse_obs_def_ocean_mod raises error when no definitions found.
+    def test_parse_obs_def_model_mod_no_type_definitions(self, tmp_path: Path):
+        """Test parse_obs_def_model_mod raises error when no definitions found.
         
         Given: An RST file with BEGIN/END markers but no actual definitions
-        When: parse_obs_def_ocean_mod() is called
+        When: parse_obs_def_model_mod() is called
         Then: ValueError is raised indicating no definitions found
         """
         empty_rst = tmp_path / "empty.rst"
@@ -654,20 +672,73 @@ class TestParseObsDefOceanMod:
 """)
         
         with pytest.raises(ValueError, match="No observation type definitions found"):
-            config.parse_obs_def_ocean_mod(str(empty_rst))
+            config.parse_obs_def_model_mod(str(empty_rst))
     
-    def test_parse_obs_def_ocean_mod_missing_markers(self, tmp_path: Path):
-        """Test parse_obs_def_ocean_mod raises error when markers are missing.
+    def test_parse_obs_def_model_mod_missing_markers(self, tmp_path: Path):
+        """Test parse_obs_def_model_mod raises error when markers are missing.
         
         Given: An RST file without BEGIN/END DART PREPROCESS markers
-        When: parse_obs_def_ocean_mod() is called
+        When: parse_obs_def_model_mod() is called
         Then: ValueError is raised indicating markers not found
         """
         invalid_rst = tmp_path / "invalid.rst"
         invalid_rst.write_text("Some content without markers")
         
         with pytest.raises(ValueError, match="Could not find type definitions section"):
-            config.parse_obs_def_ocean_mod(str(invalid_rst))
+            config.parse_obs_def_model_mod(str(invalid_rst))
+
+    def test_parse_obs_def_model_mod_valid_f90_cice_format(self, fixtures_root: Path):
+        """Test parse_obs_def_model_mod parses a CICE-style f90 file correctly.
+
+        Given: A valid CICE obs_def_cice_mod.f90 fixture file
+        When: parse_obs_def_model_mod() is called
+        Then: Two dictionaries are returned with correct CICE type mappings
+        """
+        f90_file = fixtures_root / "mock_obs_def_cice_mod.f90"
+
+        obs_type_to_qty, qty_to_obs_types = config.parse_obs_def_model_mod(str(f90_file))
+
+        assert 'SYN_SEAICE_CONCENTR' in obs_type_to_qty
+        assert obs_type_to_qty['SYN_SEAICE_CONCENTR'] == 'QTY_SEAICE_CONCENTR'
+        assert 'SAT_U_SEAICE_COMPONENT' in obs_type_to_qty
+        assert obs_type_to_qty['SAT_U_SEAICE_COMPONENT'] == 'QTY_U_SEAICE_COMPONENT'
+        assert 'QTY_SEAICE_CONCENTR' in qty_to_obs_types
+        assert len(obs_type_to_qty) > 0
+        assert all(v.startswith('QTY_') for v in obs_type_to_qty.values())
+
+    def test_parse_obs_def_model_mod_f90_types_without_common_code(self, fixtures_root: Path):
+        """Test that f90 entries without COMMON_CODE are parsed correctly.
+
+        Given: A CICE f90 fixture containing entries like
+               !SAT_SEAICE_AGREG_FY, QTY_SEAICE_AGREG_FY  (no COMMON_CODE)
+        When: parse_obs_def_model_mod() is called
+        Then: Those types appear in obs_type_to_qty with the correct QTY mapping
+        """
+        f90_file = fixtures_root / "mock_obs_def_cice_mod.f90"
+
+        obs_type_to_qty, _ = config.parse_obs_def_model_mod(str(f90_file))
+
+        assert 'SAT_SEAICE_AGREG_FY' in obs_type_to_qty
+        assert obs_type_to_qty['SAT_SEAICE_AGREG_FY'] == 'QTY_SEAICE_AGREG_FY'
+        assert 'SAT_SEAICE_AGREG_SURFACETEMP' in obs_type_to_qty
+        assert obs_type_to_qty['SAT_SEAICE_AGREG_SURFACETEMP'] == 'QTY_SEAICE_AGREG_SURFACETEMP'
+
+    def test_parse_obs_def_model_mod_f90_shared_qty(self, fixtures_root: Path):
+        """Test that two obs types sharing the same QTY both appear in qty_to_obs_types.
+
+        Given: A CICE f90 fixture where SAT_SEAICE_RADAR_FREEBOARD and
+               SAT_SEAICE_LASER_FREEBOARD both map to QTY_SEAICE_AGREG_FREEBOARD
+        When: parse_obs_def_model_mod() is called
+        Then: qty_to_obs_types['QTY_SEAICE_AGREG_FREEBOARD'] contains both types
+        """
+        f90_file = fixtures_root / "mock_obs_def_cice_mod.f90"
+
+        obs_type_to_qty, qty_to_obs_types = config.parse_obs_def_model_mod(str(f90_file))
+
+        assert obs_type_to_qty['SAT_SEAICE_RADAR_FREEBOARD'] == 'QTY_SEAICE_AGREG_FREEBOARD'
+        assert obs_type_to_qty['SAT_SEAICE_LASER_FREEBOARD'] == 'QTY_SEAICE_AGREG_FREEBOARD'
+        assert 'SAT_SEAICE_RADAR_FREEBOARD' in qty_to_obs_types['QTY_SEAICE_AGREG_FREEBOARD']
+        assert 'SAT_SEAICE_LASER_FREEBOARD' in qty_to_obs_types['QTY_SEAICE_AGREG_FREEBOARD']
 
 
 class TestValidateAndExpandObsTypes:
@@ -899,11 +970,11 @@ class TestCheckOrCreateFolderEdgeCases:
             config.check_or_create_folder(str(target), "test_folder")
 
 
-class TestParseObsDefOceanModEdgeCases:
-    """Additional tests for parse_obs_def_ocean_mod error paths."""
+class TestParseObsDefModelModEdgeCases:
+    """Additional edge-case tests for parse_obs_def_model_mod error paths."""
     
-    def test_parse_obs_def_ocean_mod_ioerror(self, tmp_path, monkeypatch):
-        """Test parse_obs_def_ocean_mod handles IOError during file reading."""
+    def test_parse_obs_def_model_mod_ioerror(self, tmp_path, monkeypatch):
+        """Test parse_obs_def_model_mod handles IOError during file reading."""
         rst_file = tmp_path / "obs_def.rst"
         rst_file.write_text("! BEGIN DART PREPROCESS TYPE DEFINITIONS\n! END DART PREPROCESS TYPE DEFINITIONS")
         
@@ -912,11 +983,11 @@ class TestParseObsDefOceanModEdgeCases:
         
         monkeypatch.setattr("builtins.open", mock_open)
         
-        with pytest.raises(IOError, match="Could not read RST file"):
-            config.parse_obs_def_ocean_mod(str(rst_file))
+        with pytest.raises(IOError, match="Could not read file"):
+            config.parse_obs_def_model_mod(str(rst_file))
     
-    def test_parse_obs_def_ocean_mod_wrong_format(self, tmp_path):
-        """Test parse_obs_def_ocean_mod raise error if malformed."""
+    def test_parse_obs_def_model_mod_wrong_format(self, tmp_path):
+        """Test parse_obs_def_model_mod raise error if malformed."""
         rst_content = """
 ! BEGIN DART PREPROCESS TYPE DEFINITIONS
 FLOAT_TEMPERATURE, QTY_TEMPERATURE, COMMON_CODE
@@ -928,4 +999,4 @@ FLOAT_SALINITY, QTY_SALINITY, COMMON_CODE
         rst_file.write_text(rst_content)
         
         with pytest.raises(ValueError, match="No observation type definitions found in"):
-            config.parse_obs_def_ocean_mod(str(rst_file))
+            config.parse_obs_def_model_mod(str(rst_file))

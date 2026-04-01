@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from collections.abc import Iterator
+import os
 
 import dask.dataframe as dd
 import numpy as np
@@ -24,6 +25,7 @@ class ModelAdapterCapabilities:
     supports_no_matching: bool = True
     supports_force_obs_time: bool = True
     is_ocean: bool = False
+    is_sea_ice: bool = False
 
 
 class ModelAdapter(ABC):
@@ -40,9 +42,8 @@ class ModelAdapter(ABC):
 
         Note: This is an abstract base class. Subclasses must override this
         method to set:
-        - self.ocean_model: Name of the ocean model (str)
+        - self.model_name: Name of the ocean model (str)
         - self.time_varname: Name of the time variable in model files (str)
-        - self.is_ocean: Toggle for ocean model output (bool)
         """
         pass  # Subclasses must implement
 
@@ -113,17 +114,17 @@ class ModelAdapter(ABC):
         cap = self.capabilities
         if opts.trim_obs and not cap.supports_trim_obs:
             raise NotImplementedError(
-                f"{self.ocean_model} adapter does not support "
+                f"{self.model_name} adapter does not support "
                 f"observation files trimming."
             )
         if opts.no_matching and not cap.supports_no_matching:
             raise NotImplementedError(
-                f"{self.ocean_model} adapter does not support "
+                f"{self.model_name} adapter does not support "
                 f"skipping time matching."
             )
         if opts.force_obs_time and not cap.supports_force_obs_time:
             raise NotImplementedError(
-                f"{self.ocean_model} adapter does not support "
+                f"{self.model_name} adapter does not support "
                 f"assigning the observations reference time to model files."
             )       
 
@@ -176,13 +177,22 @@ class ModelAdapter(ABC):
         return False
 
     
-    def parse_dart_obs_type(self, rst_file_path: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
-        """Select parser depending on model (currently ocean only)"""
+    def parse_dart_obs_type(self, obs_def_file_dir: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
+        """Select parser depending on model (currently ocean and sea-ice only)"""
 
-        if self.is_ocean:
-            return config_utils.parse_obs_def_ocean_mod(rst_file_path)
+        if self.capabilities.is_ocean:
+            return config_utils.parse_obs_def_model_mod(
+                os.path.join(obs_def_file_dir, "obs_def_ocean_mod.rst")
+            )
 
-        raise NotImplementedError("Only ocean models are currently supported")
+        if self.capabilities.is_sea_ice:
+            return config_utils.parse_obs_def_model_mod(
+                os.path.join(obs_def_file_dir, "obs_def_cice_mod.f90")
+            )
+
+        raise NotImplementedError(
+            "Only ocean and sea ice models are currently supported"
+        )
 
 
     def get_model_boundaries(self, geometry_file: str, margin: float = 0.0):

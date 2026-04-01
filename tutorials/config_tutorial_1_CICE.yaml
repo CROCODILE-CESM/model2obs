@@ -2,25 +2,21 @@
 # model2obs Configuration Template 
 # ==========================================
 # This template file contains all the necessary configuration parameters for
-# running model2obs model-observation comparison workflows with ROMS Rutgers
+# running model2obs model-observation comparison workflows with CICE
 # model ouputs. Copy this file and modify the paths below to match your local
 # system setup. For more details, see the README.md file and tutorial notebooks.
 
 # Ocean or sea-ice model to use (required)
 # Supported values: MOM6, ROMS_Rutgers, CICE
-model_name: ROMS_Rutgers
+model_name: CICE
 
 ####### INPUT FILES #######
 # Directory containing model output files (.nc format) that you want to
 # compare with observations
-model_files_folder: /path/to/model_files/
-
-# Model configuration files (all must be .nc files from your model simulation)
-# roms_filename: Any one of your model output files (used to read grid structure and time info)
-roms_filename: /path/to/roms_filename
+model_files_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6/
 
 # Directory containing observation files in DART observation sequence format
-obs_seq_in_folder: /path/to/obs/
+obs_seq_in_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_CrocoLake/
 
 ####### OUTPUT FILES #######
 # Output directories for processed files (will be created automatically if they don't exist)
@@ -29,28 +25,29 @@ obs_seq_in_folder: /path/to/obs/
 # trimmed_obs_folder: Location for observation files trimmed to model grid boundaries
 # parquet_folder: Final output location for processed model-observation comparison data
 # tmp_folder: Folder to store temporary files
-output_folder: $WORK/model2obs_output/workflow_1/out_obs_seq_in/
-input_nml_bck: $WORK/model2obs_output/workflow_1/input_bckp/
-trimmed_obs_folder: $WORK/model2obs_output/workflow_1/out_trimmed_obs_seq_in/
-parquet_folder: $WORK/model2obs_output/workflow_1/out_parquet/
-tmp_folder: $WORK/model2obs_output/workflow_1/tmp/
+output_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_cice/out_obs_seq_in/
+input_nml_bck: $TUTORIAL_DATA_PATH/output/tutorial_1_cice/input_bckp/
+trimmed_obs_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_cice/out_trimmed_obs_seq_in/
+parquet_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_cice/out_parquet/
+tmp_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_cice/tmp/
 
 ####### DART CONFIGURATION #######
 # Path to DART's perfect_model_obs executable directory: it should point to your
 # compiled DART/models/<MODEL>/work directory (e.g., MOM6 or ROMS_rutgers)
-
-perfect_model_obs_dir: /path/to/DART/models/MOM6/work/
+perfect_model_obs_dir: $DART_ROOT_PATH/models/MOM6/work  #CASPER
 
 # Observation types to include in the comparison
-# You can use specific types (e.g., FLOAT_TEMPERATURE) or groups (e.g.,
-# ALL_TEMPERATURE); the ALL_ syntax automatically includes all observation types
+# You can use specific types (e.g., SAT_U_SEAICE_COMPONENT) or groups (e.g.,
+# ALL_U_SEAICE_COMPONENT); the ALL_ syntax automatically includes all observation types
 # for that quantity
 use_these_obs:
-   - ALL_TEMPERATURE           # Includes ALL temperature observation types (Argo, CTD, XBT, etc.)
+   - SYN_SEAICE_CONCENTR       # Includes only SYN_SEAICE_CONCENTR observation types
    # Other examples:
-   # - ALL_SALINITY            # Includes ALL salinity observation types  
-   # - FLOAT_TEMPERATURE       # Include only float temperature measurements
-   # - FLOAT_SALINITY          # Include only float salinity measurements
+   # - ALL_SEAICE_AGREG_FREEBOARD      # Includes ALL SEAICE_RADAR_FREEBOARD quantity types
+                                       # (e.g. SAT_SEAICE_RADAR_FREEBOARD and SAT_SEAICE_LASER_FREEBOARD)   
+   # - SAT_U_SEAICE_COMPONENT
+   # - ALL_U_SEAICE_COMPONENT          # Include u sea-ice component quantities (only one
+                                       # available, SAT_U_SEAICE_COMPONENT, at the time of writing)  
 
 # Time window for matching observations to model output
 # This determines how close in time observations need to be to model output for interpolation
@@ -63,10 +60,10 @@ time_window:
   months: 0      # Additional months (30 days/month)
   years: 0       # Additional years (365 days/year)
 
-# ROMS Rutgers variable naming and type
+# CICE variable naming and type
 # For each variable, follow the logic:
 #   <varname in nc file>: <DART quantity type> 
-variables:
-  salt: QTY_SALINITY
-  temp: QTY_TEMPERATURE
-  zeta: QTY_SEA_SURFACE_HEIGHT
+model_state_variables:
+  aicen: QTY_SEAICE_CONCENTR
+  vicen: QTY_SEAICE_VOLUME
+  vsnon: QTY_SEAICE_SNOWVOLUME 

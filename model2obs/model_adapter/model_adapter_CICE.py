@@ -1,33 +1,37 @@
-"""ModelAdapter class to normalize ROMS Rutgers model input."""
+"""ModelAdapter class to normalize CICE model input."""
 
 from contextlib import contextmanager
 from collections.abc import Iterator
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+import numpy as np
 import pandas as pd
 import xarray as xr
+import warnings
 
 from . import ModelAdapter, ModelAdapterCapabilities
 from ..utils import config as config_utils
 
-class ModelAdapterROMSRutgers(ModelAdapter):
+class ModelAdapterCICE(ModelAdapter):
     """Base class for all model normalizations
 
     Provides common functionality for model input normalization.
     """
-
     capabilities = ModelAdapterCapabilities(
         supports_trim_obs = False,
-        supports_no_matching = False,
-        supports_force_obs_time = False,
-        is_ocean = True
+        supports_no_matching = True,
+        supports_force_obs_time = True,
+        is_sea_ice = True
     )
 
     def __init__(self) -> None:
 
         # Assign ocean model name
-        self.model_name = "ROMS_Rutgers"
-        # Assign time_varname_name
-        self.time_varname = "ocean_time"
+        self.model_name = "CICE"
+        # Assign time_variable_name
+        self.time_varname = None
+        warnings.warn(
+            "time_varname not defined for CICE yet"
+        )
         return
 
     def get_required_config_keys(self) -> List[str]:
@@ -41,7 +45,6 @@ class ModelAdapterROMSRutgers(ModelAdapter):
             'model_files_folder', 
             'obs_seq_in_folder', 
             'output_folder',
-            'roms_filename',
             'perfect_model_obs_dir', 
             'parquet_folder'
        ]
@@ -54,32 +57,44 @@ class ModelAdapterROMSRutgers(ModelAdapter):
             List of common key
 
         """
-    
+
         return [
-            'roms_filename',
-            'variables',
-            'debug'
+            'model_state_variables',
         ]
 
+    def get_extra_model_keys(self) -> Dict[str, Any]:
+        """Return list of keys that are required in model nml in input.nml for
+        perfect_model_obs to run, but that have a static, inconsequential value
+        
+        Returns:
+            Dict of extra required keys
+
+        """
+
+        extra_keys = {}
+        extra_keys["model_perturbation_amplitude"] = 0.00002
+        extra_keys["binary_grid_file_format"] = 'big_endian'
+        extra_keys["debug"] = 1
+        return extra_keys
 
     def validate_paths(self, config, run_opts) -> None:
         """Validate paths provided in config file."""
 
         super().validate_paths(config, run_opts)
 
-        # ROMS specific validation
-        print("  Validating roms model file...")
-        config_utils.check_nc_file(config['roms_filename'], "roms_filename")
+        # CICE specific validation
+        print("  Validating CICE model file...")
+        config_utils.check_nc_file(config['cice_filename'], "cice_filename")
 
         return
 
     @contextmanager
     def open_dataset_ctx(self, path: str) -> Iterator[xr.Dataset]:
-        """Open a ROMS dataset, applying time fixes only when a time variable is present.
+        """Open a CICE dataset, applying time fixes only when a time variable is present.
 
-        For time-varying model output files, the time variable is decoded and renamed to
-        the canonical ``"time"`` name. For static files that carry no time dimension,
-        the dataset is returned as-is.
+        For time-varying model output files, the CICE calendar attribute is fixed and the
+        time variable is renamed to the canonical ``"time"`` name. For static files such
+        as ``ocean_geometry.nc`` that carry no time dimension, the dataset is returned as-is.
 
         Args:
             path: Path to the netCDF file.
@@ -88,24 +103,13 @@ class ModelAdapterROMSRutgers(ModelAdapter):
             xr.Dataset ready for use; time variable renamed to ``"time"`` when present.
         """
         
-        ds = xr.open_dataset(
-            path,
-            decode_times=False
+        raise ValueError(
+            "not implemented for CICE yet"
         )
-
-        try:
-            # Fix calendar as xarray does not read it consistently with ncviews.
-            # Static geometry files have no time variable, so skip time processing.
-            if self.time_varname in ds:
-                ds = xr.decode_cf(ds, decode_timedelta=True)
-                ds = self.rename_time_varname(ds)
-            yield ds
-        finally:
-            ds.close()
 
     def convert_units(self, df) -> pd.DataFrame:
         """Convert observation or model units to match workflow
-
+        
         Args:
             df: DataFrame with columns including 'type' and 'obs'
 
@@ -114,12 +118,6 @@ class ModelAdapterROMSRutgers(ModelAdapter):
 
         """
 
-        # ROMS is in PSU
-        # DART's obs_seq are in PSU/1000
-        # DART's pmo for ROMS Rutgers does not convert units
-        # In the future DART might move to PSU
-        condition = df["type"].str.contains("SALINITY")
-        df["obs"] = df["obs"].mask(condition, df["obs"] * 1000)
-    
-        return df
-
+        raise ValueError(
+            "not implemented for CICE yet"
+        )

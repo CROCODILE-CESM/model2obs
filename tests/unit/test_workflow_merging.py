@@ -23,7 +23,7 @@ class TestMergePairToParquet:
     def workflow(self, tmp_path):
         """Create a WorkflowModelObs instance with minimal config."""
         config = {
-            'ocean_model': "mom6",
+            'model_name': "mom6",
             'model_files_folder': str(tmp_path / "model"),
             'obs_seq_in_folder': str(tmp_path / "obs"),
             'output_folder': str(tmp_path / "output"),
@@ -414,7 +414,7 @@ class TestMergeModelObsToParquet:
         (obs_folder / "obs_seq_002.in").write_text("mock")
         
         config = {
-            'ocean_model': 'mom6',
+            'model_name': 'mom6',
             'model_files_folder': str(tmp_path / "model"),
             'obs_seq_in_folder': str(obs_folder),
             'output_folder': str(output_folder),
@@ -471,7 +471,7 @@ class TestMergeModelObsToParquet:
         (output_folder / "obs_seq_001.out").write_text("mock")
         
         config = {
-            'ocean_model': 'mom6',
+            'model_name': 'mom6',
             'model_files_folder': str(tmp_path / "model"),
             'obs_seq_in_folder': str(tmp_path / "obs"),
             'trimmed_obs_folder': str(trimmed_folder),

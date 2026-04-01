@@ -21,12 +21,12 @@ class Workflow(ABC):
             config: Configuration dictionary containing workflow parameters
         """
         self.config = config
-        if "ocean_model" not in config.keys():
-            ocean_model = None
+        if "model_name" not in config.keys():
+            model_name = None
         else:
-            ocean_model = config["ocean_model"]
+            model_name = config["model_name"]
         self.model_adapter = create_model_adapter(
-            ocean_model=ocean_model
+            model_name=model_name
         )
         self._validate_config()
 

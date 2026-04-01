@@ -315,7 +315,7 @@ class WorkflowModelObs(workflow.Workflow):
             "model_nml", "assimilation_period_seconds", self.config['time_window']['seconds'], string=False
         )
 
-        print(f'ocean model: {self.model_adapter.ocean_model}')
+        print(f'model: {self.model_adapter.model_name}')
         common_model_keys = self.model_adapter.get_common_model_keys()
         for key in self.config.keys():
             if key=='debug':
@@ -328,24 +328,39 @@ class WorkflowModelObs(workflow.Workflow):
                     "model_nml", key, self.config[key], dict_format='quintuplet'
                 )
             elif key == 'model_state_variables':
-                # MOM6 5-field format: 'var', 'QTY', 'NA', 'NA', 'UPDATE'
-                self._namelist.update_namelist_param(
-                    "model_nml", key, self.config[key], dict_format='quintuplet'
-                )
+                if self.model_adapter.model_name == "MOM6":
+                    # MOM6 5-field format: 'var', 'QTY', 'NA', 'NA', 'UPDATE'
+                    self._namelist.update_namelist_param(
+                        "model_nml", key, self.config[key], dict_format='quintuplet'
+                    )
+                if self.model_adapter.model_name == "CICE":
+                    # CICE 3-field format: 'var', 'QTY', 'UPDATE'
+                    self._namelist.update_namelist_param(
+                        "model_nml", key, self.config[key], dict_format='triplet'
+                    )
             elif key in common_model_keys:
                 self._namelist.update_namelist_param(
                     "model_nml", key, self.config[key]
                 )
 
+        # CICE needs specific fields
+        if self.model_adapter.model_name == "CICE":
+            extra_keys =  self.model_adapter.get_extra_model_keys()
+            for key in extra_keys:
+                type_str = isinstance(extra_keys[key], str)
+                self._namelist.update_namelist_param(
+                    "model_nml", key, extra_keys[key], string = type_str
+                )
+            
         # Update observation types if specified in config
         if 'use_these_obs' in self.config:
             print("  Processing observation types from config...")
-            rst_file_path = os.path.join(
+            obs_def_file_dir = os.path.join(
                 self.config['perfect_model_obs_dir'],
-                '../../../observations/forward_operators/obs_def_ocean_mod.rst'
+                '../../../observations/forward_operators/'
             )
             try:
-                obs_types_tuple = self.model_adapter.parse_dart_obs_type(rst_file_path)
+                obs_types_tuple = self.model_adapter.parse_dart_obs_type(obs_def_file_dir)
                 expanded_obs_types = config_utils.validate_and_expand_obs_types(
                     self.config['use_these_obs'], obs_types_tuple
                 )

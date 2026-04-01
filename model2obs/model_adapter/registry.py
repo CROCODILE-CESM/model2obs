@@ -35,21 +35,23 @@ from typing import Type
 from .model_adapter import ModelAdapter
 from .model_adapter_MOM6 import ModelAdapterMOM6
 from .model_adapter_ROMS_Rutgers import ModelAdapterROMSRutgers
+from .model_adapter_CICE import ModelAdapterCICE
 
 _ADAPTERS: dict[str, Type[ModelAdapter]] = {
     "mom6": ModelAdapterMOM6,
     "roms_rutgers": ModelAdapterROMSRutgers,
+    "cice": ModelAdapterCICE,
 }
 
-def create_model_adapter(ocean_model: str, **kwargs) -> ModelAdapter:
+def create_model_adapter(model_name: str, **kwargs) -> ModelAdapter:
     """Create a model adapter instance for the specified ocean model.
     
     Factory function that creates and returns the appropriate ModelAdapter
-    subclass based on the ocean_model string. Model names are case-insensitive
+    subclass based on the model_name string. Model names are case-insensitive
     and whitespace is automatically stripped.
     
     Args:
-        ocean_model: Name of the ocean model (e.g., 'MOM6', 'ROMS_Rutgers'). 
+        model_name: Name of the model (e.g., 'MOM6', 'ROMS_Rutgers', 'CICE'). 
                     Case-insensitive. Cannot be None.
         **kwargs: Additional keyword arguments passed to adapter constructor
                  (currently unused but reserved for future extensibility).
@@ -58,7 +60,7 @@ def create_model_adapter(ocean_model: str, **kwargs) -> ModelAdapter:
         ModelAdapter subclass instance appropriate for the specified model.
     
     Raises:
-        ValueError: If ocean_model is None or if the model name is not
+        ValueError: If model_name is None or if the model name is not
                    registered in the adapter registry.
     
     Examples:
@@ -66,7 +68,7 @@ def create_model_adapter(ocean_model: str, **kwargs) -> ModelAdapter:
         >>> adapter = create_model_adapter("MOM6")
         >>> isinstance(adapter, ModelAdapterMOM6)
         True
-        >>> adapter.ocean_model
+        >>> adapter.model_name
         'MOM6'
         
         >>> # Case-insensitive
@@ -83,18 +85,18 @@ def create_model_adapter(ocean_model: str, **kwargs) -> ModelAdapter:
         >>> create_model_adapter("invalid")
         Traceback (most recent call last):
             ...
-        ValueError: Unknown ocean_model='invalid'. Allowed values: mom6, roms.
+        ValueError: Unknown model_name='invalid'. Allowed values: mom6, roms.
     """
-    if ocean_model is None:
-        raise ValueError("ocean_model is required (e.g. 'MOM6' or 'ROMS_Rutgers').")
+    allowed = ", ".join(sorted(_ADAPTERS.keys()))
+    if model_name is None:
+        raise ValueError("model_name is required (allowed values: {allowed}).")
 
-    key = ocean_model.strip().lower()
+    key = model_name.strip().lower()
     try:
         adapter_cls = _ADAPTERS[key]
     except KeyError as e:
-        allowed = ", ".join(sorted(_ADAPTERS.keys()))
         raise ValueError(
-            f"Unknown ocean_model={ocean_model!r}. Allowed values: {allowed}."
+            f"Unknown model_name={model_name!r}. Allowed values: {allowed}."
         ) from e
 
     return adapter_cls(**kwargs)

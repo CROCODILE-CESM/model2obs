@@ -14,6 +14,7 @@ dependencies where appropriate.
 """
 
 import os
+import shutil
 import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -24,9 +25,10 @@ from typing import Any, Dict, List
 from unittest.mock import patch, mock_open
 import xarray as xr
 
-from model2obs.model_adapter.model_adapter import ModelAdapter
+from model2obs.model_adapter.model_adapter import ModelAdapter, ModelAdapterCapabilities
 from model2obs.model_adapter.model_adapter_MOM6 import ModelAdapterMOM6
 from model2obs.model_adapter.model_adapter_ROMS_Rutgers import ModelAdapterROMSRutgers
+from model2obs.model_adapter.model_adapter_CICE import ModelAdapterCICE
 from model2obs.model_adapter.registry import create_model_adapter
 from model2obs.workflows.workflow_model_obs import RunOptions
 
@@ -58,18 +60,31 @@ class TestModelAdapterRegistry:
 
     def test_create_adapter_invalid_model(self):
         """Test creating adapter with invalid model name raises error."""
-        with pytest.raises(ValueError, match="Unknown ocean_model"):
+        with pytest.raises(ValueError, match="Unknown model_name"):
             create_model_adapter("invalid_model")
 
     def test_create_adapter_none_raises_error(self):
         """Test creating adapter with None raises error."""
-        with pytest.raises(ValueError, match="ocean_model is required"):
+        with pytest.raises(ValueError, match="model_name is required"):
             create_model_adapter(None)
 
     def test_create_adapter_whitespace_handling(self):
         """Test creating adapter handles whitespace in model name."""
         adapter = create_model_adapter("  MOM6  ")
         assert isinstance(adapter, ModelAdapterMOM6)
+
+    def test_create_cice_adapter_raises_value_error(self):
+        """Test that CICE is registered but raises ValueError on instantiation.
+
+        Given: The model name 'cice' (or 'CICE')
+        When: create_model_adapter() is called
+        Then: ValueError is raised because ModelAdapterCICE.__init__ is incomplete
+        """
+        with pytest.raises(ValueError, match="time_varname not defined for CICE yet"):
+            create_model_adapter("cice")
+
+        with pytest.raises(ValueError, match="time_varname not defined for CICE yet"):
+            create_model_adapter("CICE")
 
 
 @pytest.fixture
@@ -780,6 +795,110 @@ class TestModelAdapterPathValidation:
         
         assert config['input_nml_bck'] == 'input.nml.backup'
 
+    def test_cice_validate_paths_valid_cice_file(self, tmp_path):
+        """Test CICE validate_paths succeeds when cice_filename is a valid .nc file.
+
+        Given: A ModelAdapterCICE instance and a config with a real .nc file
+        When: validate_paths() is called
+        Then: No exception is raised
+        """
+        adapter = object.__new__(ModelAdapterCICE)
+        adapter.model_name = "CICE"
+        adapter.time_varname = None
+        adapter.capabilities = ModelAdapterCICE.capabilities
+
+        model_folder = tmp_path / "model_files"
+        model_folder.mkdir()
+        (model_folder / "model_01.nc").touch()
+
+        obs_folder = tmp_path / "obs"
+        obs_folder.mkdir()
+        (obs_folder / "obs_01.in").touch()
+
+        cice_file = tmp_path / "cice_output.nc"
+        cice_file.touch()
+
+        cfg = {
+            'model_files_folder': str(model_folder),
+            'obs_seq_in_folder': str(obs_folder),
+            'output_folder': str(tmp_path / "output"),
+            'tmp_folder': str(tmp_path / "tmp"),
+            'parquet_folder': str(tmp_path / "parquet"),
+            'cice_filename': str(cice_file),
+        }
+        run_opts = RunOptions(trim_obs=False, no_matching=False, force_obs_time=False)
+
+        adapter.validate_paths(cfg, run_opts)
+
+    def test_cice_validate_paths_missing_cice_file(self, tmp_path):
+        """Test CICE validate_paths raises FileNotFoundError for missing cice_filename.
+
+        Given: A ModelAdapterCICE instance and a config pointing to a non-existent file
+        When: validate_paths() is called
+        Then: FileNotFoundError is raised
+        """
+        adapter = object.__new__(ModelAdapterCICE)
+        adapter.model_name = "CICE"
+        adapter.time_varname = None
+        adapter.capabilities = ModelAdapterCICE.capabilities
+
+        model_folder = tmp_path / "model_files"
+        model_folder.mkdir()
+        (model_folder / "model_01.nc").touch()
+
+        obs_folder = tmp_path / "obs"
+        obs_folder.mkdir()
+        (obs_folder / "obs_01.in").touch()
+
+        cfg = {
+            'model_files_folder': str(model_folder),
+            'obs_seq_in_folder': str(obs_folder),
+            'output_folder': str(tmp_path / "output"),
+            'tmp_folder': str(tmp_path / "tmp"),
+            'parquet_folder': str(tmp_path / "parquet"),
+            'cice_filename': str(tmp_path / "nonexistent.nc"),
+        }
+        run_opts = RunOptions(trim_obs=False, no_matching=False, force_obs_time=False)
+
+        with pytest.raises(FileNotFoundError, match="cice_filename"):
+            adapter.validate_paths(cfg, run_opts)
+
+    def test_cice_validate_paths_non_nc_cice_file(self, tmp_path):
+        """Test CICE validate_paths raises ValueError when cice_filename is not .nc.
+
+        Given: A ModelAdapterCICE instance and a config with a non-.nc cice_filename
+        When: validate_paths() is called
+        Then: ValueError is raised
+        """
+        adapter = object.__new__(ModelAdapterCICE)
+        adapter.model_name = "CICE"
+        adapter.time_varname = None
+        adapter.capabilities = ModelAdapterCICE.capabilities
+
+        model_folder = tmp_path / "model_files"
+        model_folder.mkdir()
+        (model_folder / "model_01.nc").touch()
+
+        obs_folder = tmp_path / "obs"
+        obs_folder.mkdir()
+        (obs_folder / "obs_01.in").touch()
+
+        wrong_file = tmp_path / "cice_output.txt"
+        wrong_file.touch()
+
+        cfg = {
+            'model_files_folder': str(model_folder),
+            'obs_seq_in_folder': str(obs_folder),
+            'output_folder': str(tmp_path / "output"),
+            'tmp_folder': str(tmp_path / "tmp"),
+            'parquet_folder': str(tmp_path / "parquet"),
+            'cice_filename': str(wrong_file),
+        }
+        run_opts = RunOptions(trim_obs=False, no_matching=False, force_obs_time=False)
+
+        with pytest.raises(ValueError, match="cice_filename"):
+            adapter.validate_paths(cfg, run_opts)
+
 
 class TestModelAdapterROMSRutgers:
     """Test ModelAdapterROMSRutgers methods"""
@@ -1000,6 +1119,144 @@ class TestModelAdapterROMSRutgers:
         model_adapter.validate_run_options(run_opts)
 
 
+class TestModelAdapterCICE:
+    """Test suite for ModelAdapterCICE.
+
+    Because ModelAdapterCICE.__init__ is not yet complete (raises ValueError),
+    tests for individual methods use object.__new__ to bypass __init__ and
+    set required attributes manually. Only test_init_raises_value_error
+    calls __init__ directly.
+    """
+
+    @staticmethod
+    def _make_cice_adapter() -> ModelAdapterCICE:
+        """Return a ModelAdapterCICE instance with __init__ bypassed."""
+        adapter = object.__new__(ModelAdapterCICE)
+        adapter.model_name = "CICE"
+        adapter.time_varname = None
+        return adapter
+
+    def test_init_raises_value_error(self):
+        """Test ModelAdapterCICE() raises ValueError (incomplete implementation).
+
+        Given: Direct instantiation of ModelAdapterCICE
+        When: __init__ is called
+        Then: ValueError is raised with message about time_varname
+        """
+        with pytest.raises(ValueError, match="time_varname not defined for CICE yet"):
+            ModelAdapterCICE()
+
+    def test_capabilities_trim_obs_false(self):
+        """Test CICE adapter does not support trim_obs."""
+        assert ModelAdapterCICE.capabilities.supports_trim_obs is False
+
+    def test_capabilities_no_matching_true(self):
+        """Test CICE adapter supports no_matching."""
+        assert ModelAdapterCICE.capabilities.supports_no_matching is True
+
+    def test_capabilities_force_obs_time_true(self):
+        """Test CICE adapter supports force_obs_time."""
+        assert ModelAdapterCICE.capabilities.supports_force_obs_time is True
+
+    def test_get_required_config_keys(self):
+        """Test get_required_config_keys returns all CICE-specific keys.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_required_config_keys() is called
+        Then: Returns a list containing the six required keys including cice_filename
+        """
+        adapter = self._make_cice_adapter()
+        keys = adapter.get_required_config_keys()
+
+        assert 'model_files_folder' in keys
+        assert 'obs_seq_in_folder' in keys
+        assert 'output_folder' in keys
+        assert 'perfect_model_obs_dir' in keys
+        assert 'parquet_folder' in keys
+
+    def test_get_common_model_keys(self):
+        """Test get_common_model_keys returns CICE-specific common keys.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_common_model_keys() is called
+        Then: Returns a list containing cice_filename and variables
+        """
+        adapter = self._make_cice_adapter()
+        keys = adapter.get_common_model_keys()
+
+        assert 'model_state_variables' in keys
+
+    def test_open_dataset_ctx_raises_value_error(self):
+        """Test open_dataset_ctx raises ValueError (not yet implemented).
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: open_dataset_ctx() is entered
+        Then: ValueError is raised
+        """
+        adapter = self._make_cice_adapter()
+        with pytest.raises(ValueError, match="not implemented for CICE yet"):
+            with adapter.open_dataset_ctx("some_path.nc"):
+                pass
+
+    def test_convert_units_raises_value_error(self):
+        """Test convert_units raises ValueError (not yet implemented).
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: convert_units() is called
+        Then: ValueError is raised
+        """
+        import pandas as pd
+        adapter = self._make_cice_adapter()
+        with pytest.raises(ValueError, match="not implemented for CICE yet"):
+            adapter.convert_units(pd.DataFrame())
+
+    def test_get_extra_model_keys_returns_dict(self):
+        """Test get_extra_model_keys returns a dict.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_extra_model_keys() is called
+        Then: The return value is a dict
+        """
+        adapter = self._make_cice_adapter()
+        result = adapter.get_extra_model_keys()
+        assert isinstance(result, dict)
+
+    def test_get_extra_model_keys_contains_required_keys(self):
+        """Test get_extra_model_keys returns all three required CICE keys.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_extra_model_keys() is called
+        Then: The dict contains model_perturbation_amplitude, binary_grid_file_format, debug
+        """
+        adapter = self._make_cice_adapter()
+        result = adapter.get_extra_model_keys()
+        assert "model_perturbation_amplitude" in result
+        assert "binary_grid_file_format" in result
+        assert "debug" in result
+
+    def test_get_extra_model_keys_float_value(self):
+        """Test model_perturbation_amplitude is a float.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_extra_model_keys() is called
+        Then: model_perturbation_amplitude is a float (so Fortran namelist gets fixed-point formatting)
+        """
+        adapter = self._make_cice_adapter()
+        result = adapter.get_extra_model_keys()
+        assert isinstance(result["model_perturbation_amplitude"], float)
+
+    def test_get_extra_model_keys_string_value(self):
+        """Test binary_grid_file_format is a str.
+
+        Given: A ModelAdapterCICE instance (bypassing __init__)
+        When: get_extra_model_keys() is called
+        Then: binary_grid_file_format is a str (so it gets written with quotes in the namelist)
+        """
+        adapter = self._make_cice_adapter()
+        result = adapter.get_extra_model_keys()
+        assert isinstance(result["binary_grid_file_format"], str)
+
+
 class TestGetModelTimeInDaysSeconds:
     """Test suite for get_model_time_in_days_seconds() function."""
     
@@ -1067,13 +1324,13 @@ class TestParseDartObsType:
     """Tests for ModelAdapter.parse_dart_obs_type().
 
     Covers:
-    - Delegation to config_utils.parse_obs_def_ocean_mod for ocean models
-    - NotImplementedError for non-ocean models
-    - End-to-end parsing with a real fixture RST file
+    - Delegation to config_utils.parse_obs_def_model_mod for ocean and sea-ice models
+    - NotImplementedError for unsupported model types
+    - End-to-end parsing with real RST and f90 fixture files
     """
 
     _MOCK_PARSE_TARGET = (
-        'model2obs.model_adapter.model_adapter.config_utils.parse_obs_def_ocean_mod'
+        'model2obs.model_adapter.model_adapter.config_utils.parse_obs_def_model_mod'
     )
     _MOCK_RESULT = (
         {'FLOAT_TEMPERATURE': 'QTY_TEMPERATURE'},
@@ -1081,54 +1338,65 @@ class TestParseDartObsType:
     )
 
     def test_parse_dart_obs_type_mom6_delegates_to_config_utils(self):
-        """Test parse_dart_obs_type calls parse_obs_def_ocean_mod for MOM6.
+        """Test parse_dart_obs_type calls parse_obs_def_model_mod for MOM6.
 
         Given: A MOM6 adapter (is_ocean=True)
         When: parse_dart_obs_type() is called
-        Then: config_utils.parse_obs_def_ocean_mod is called with the RST path
+        Then: config_utils.parse_obs_def_model_mod is called with the RST path
               and its return value is returned unchanged
         """
         adapter = ModelAdapterMOM6()
         with patch(self._MOCK_PARSE_TARGET, return_value=self._MOCK_RESULT) as mock_parser:
-            result = adapter.parse_dart_obs_type('/path/to/obs_def_ocean_mod.rst')
+            result = adapter.parse_dart_obs_type('/path/to/')
             mock_parser.assert_called_once_with('/path/to/obs_def_ocean_mod.rst')
             assert result == self._MOCK_RESULT
 
     def test_parse_dart_obs_type_roms_delegates_to_config_utils(self):
-        """Test parse_dart_obs_type calls parse_obs_def_ocean_mod for ROMS.
+        """Test parse_dart_obs_type calls parse_obs_def_model_mod for ROMS.
 
         Given: A ROMS_Rutgers adapter (is_ocean=True)
         When: parse_dart_obs_type() is called
-        Then: config_utils.parse_obs_def_ocean_mod is called with the RST path
+        Then: config_utils.parse_obs_def_model_mod is called with the RST path
         """
         adapter = ModelAdapterROMSRutgers()
         with patch(self._MOCK_PARSE_TARGET, return_value=self._MOCK_RESULT) as mock_parser:
-            result = adapter.parse_dart_obs_type('/path/to/obs_def_ocean_mod.rst')
+            result = adapter.parse_dart_obs_type('/path/to/')
             mock_parser.assert_called_once_with('/path/to/obs_def_ocean_mod.rst')
             assert result == self._MOCK_RESULT
 
-    def test_parse_dart_obs_type_non_ocean_raises_not_implemented(self):
-        """Test parse_dart_obs_type raises NotImplementedError when is_ocean is False.
+    def test_parse_dart_obs_type_non_ocean_non_seaice_raises_not_implemented(self):
+        """Test parse_dart_obs_type raises NotImplementedError for an adapter with no model type.
 
-        Given: An adapter with is_ocean set to False
+        Given: An adapter whose capabilities have is_ocean=False and is_sea_ice=False
         When: parse_dart_obs_type() is called
         Then: NotImplementedError is raised
         """
-        adapter = ModelAdapterMOM6()
-        adapter.is_ocean = False
+        class _NeutralAdapter(ModelAdapterMOM6):
+            capabilities = ModelAdapterCapabilities(
+                supports_trim_obs=True,
+                supports_no_matching=True,
+                supports_force_obs_time=True,
+                is_ocean=False,
+                is_sea_ice=False,
+            )
+
+        adapter = object.__new__(_NeutralAdapter)
         with pytest.raises(NotImplementedError):
-            adapter.parse_dart_obs_type('/path/to/some.rst')
+            adapter.parse_dart_obs_type('/path/to/')
 
-    def test_parse_dart_obs_type_with_valid_rst_file(self, fixtures_root: Path):
-        """Test parse_dart_obs_type returns correct dicts from a real RST fixture.
+    def test_parse_dart_obs_type_with_valid_rst_file(self, fixtures_root: Path, tmp_path: Path):
+        """Test parse_dart_obs_type returns correct dicts for an ocean adapter.
 
-        Given: A MOM6 adapter and the mock_obs_def_ocean_mod.rst fixture file
-        When: parse_dart_obs_type() is called
+        Given: A MOM6 adapter and a directory containing obs_def_ocean_mod.rst
+        When: parse_dart_obs_type() is called with the directory path
         Then: Returns non-empty obs_type_to_qty and qty_to_obs_types dicts
         """
+        shutil.copy(
+            fixtures_root / "mock_obs_def_ocean_mod.rst",
+            tmp_path / "obs_def_ocean_mod.rst"
+        )
         adapter = ModelAdapterMOM6()
-        rst_file = fixtures_root / "mock_obs_def_ocean_mod.rst"
-        obs_type_to_qty, qty_to_obs_types = adapter.parse_dart_obs_type(str(rst_file))
+        obs_type_to_qty, qty_to_obs_types = adapter.parse_dart_obs_type(str(tmp_path))
 
         assert isinstance(obs_type_to_qty, dict)
         assert isinstance(qty_to_obs_types, dict)
@@ -1145,6 +1413,41 @@ class TestParseDartObsType:
         adapter = ModelAdapterMOM6()
         with pytest.raises(FileNotFoundError):
             adapter.parse_dart_obs_type('/nonexistent/obs_def_ocean_mod.rst')
+
+    def test_parse_dart_obs_type_cice_delegates_to_config_utils(self):
+        """Test parse_dart_obs_type calls parse_obs_def_model_mod for a CICE adapter.
+
+        Given: An adapter with is_ocean=False and is_sea_ice=True
+        When: parse_dart_obs_type() is called with a directory path
+        Then: config_utils.parse_obs_def_model_mod is called with obs_def_cice_mod.f90
+              appended to the directory, and its return value is returned unchanged
+        """
+        adapter = ModelAdapterCICE()
+        with patch(self._MOCK_PARSE_TARGET, return_value=self._MOCK_RESULT) as mock_parser:
+            result = adapter.parse_dart_obs_type('/path/to/')
+            mock_parser.assert_called_once_with('/path/to/obs_def_cice_mod.f90')
+            assert result == self._MOCK_RESULT
+
+    def test_parse_dart_obs_type_with_valid_f90_file(self, fixtures_root: Path, tmp_path: Path):
+        """Test parse_dart_obs_type returns correct dicts for a sea-ice adapter.
+
+        Given: An adapter with is_sea_ice=True and a directory containing
+               obs_def_cice_mod.f90 copied from the CICE fixture
+        When: parse_dart_obs_type() is called with the directory path
+        Then: Returns non-empty dicts with QTY_SEAICE_* values
+        """
+        shutil.copy(
+            fixtures_root / "mock_obs_def_cice_mod.f90",
+            tmp_path / "obs_def_cice_mod.f90"
+        )
+        adapter = ModelAdapterCICE()
+        obs_type_to_qty, qty_to_obs_types = adapter.parse_dart_obs_type(str(tmp_path))
+
+        assert isinstance(obs_type_to_qty, dict)
+        assert isinstance(qty_to_obs_types, dict)
+        assert len(obs_type_to_qty) > 0
+        assert all(v.startswith('QTY_') for v in obs_type_to_qty.values())
+        assert any('SEAICE' in v for v in obs_type_to_qty.values())
 
 
 class TestGetModelBoundaries:

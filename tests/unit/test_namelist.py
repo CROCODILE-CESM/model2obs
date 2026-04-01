@@ -691,6 +691,139 @@ class TestUpdateNamelistParam:
         finally:
             os.chdir(original_cwd)
 
+    def test_update_param_float_small_uses_fixed_point(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param formats small floats as fixed-point, not scientific notation.
+
+        Given: A namelist with a float parameter
+        When: update_namelist_param() is called with a small float like 0.00002 and string=False
+        Then: The value is written as '0.00002' not '2e-05'
+        """
+        content = """&model_nml
+   model_perturbation_amplitude = 0.000200,
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            nml = Namelist(str(nml_file))
+            nml.update_namelist_param("model_nml", "model_perturbation_amplitude", 0.00002,
+                                      string=False)
+            assert "e-" not in nml.content
+            assert "0.00002" in nml.content
+        finally:
+            os.chdir(original_cwd)
+
+    def test_update_param_float_zero_uses_six_decimals(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param formats 0.0 with six decimal places.
+
+        Given: A namelist with a float parameter
+        When: update_namelist_param() is called with 0.0 and string=False
+        Then: The value is written as '0.000000' (6-decimal fallback)
+        """
+        content = """&model_nml
+   some_float                   = 1.0,
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            nml = Namelist(str(nml_file))
+            nml.update_namelist_param("model_nml", "some_float", 0.0, string=False)
+            assert "0.000000" in nml.content
+        finally:
+            os.chdir(original_cwd)
+
+    def test_update_param_float_large_uses_six_decimals(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param formats large floats with six decimal places.
+
+        Given: A namelist with a float parameter
+        When: update_namelist_param() is called with 100.0 (positive exponent) and string=False
+        Then: The value is written as '100.000000', not scientific notation
+        """
+        content = """&model_nml
+   some_float                   = 1.0,
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            nml = Namelist(str(nml_file))
+            nml.update_namelist_param("model_nml", "some_float", 100.0, string=False)
+            assert "100.000000" in nml.content
+            assert "e+" not in nml.content
+        finally:
+            os.chdir(original_cwd)
+
+    def test_update_param_float_very_small_precision(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param uses enough decimals for very small floats.
+
+        Given: A namelist with a float parameter
+        When: update_namelist_param() is called with 1e-10 and string=False
+        Then: The value is written with 10 decimal places so no precision is lost
+        """
+        content = """&model_nml
+   some_float                   = 1.0,
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            nml = Namelist(str(nml_file))
+            nml.update_namelist_param("model_nml", "some_float", 1e-10, string=False)
+            assert "0.0000000001" in nml.content
+            assert "e-" not in nml.content
+        finally:
+            os.chdir(original_cwd)
+
+    def test_update_param_float_inserts_new_param_fixed_point(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param inserts a new float param as fixed-point.
+
+        Given: A namelist that does not yet contain a float parameter
+        When: update_namelist_param() is called to insert it with string=False
+        Then: The new parameter is written in fixed-point notation, not scientific
+        """
+        content = """&model_nml
+   existing_param               = 1,
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            nml = Namelist(str(nml_file))
+            nml.update_namelist_param("model_nml", "new_float_param", 0.00002, string=False)
+            assert "new_float_param" in nml.content
+            assert "e-" not in nml.content
+            assert "0.00002" in nml.content
+        finally:
+            os.chdir(original_cwd)
+
+    def test_update_param_int_unaffected_by_float_formatting(self, create_test_namelist, tmp_path: Path):
+        """Test update_namelist_param does not apply float formatting to integers.
+
+        Given: A namelist with an integer parameter
+        When: update_namelist_param() is called with an int value and string=False
+        Then: The value is written without a decimal point
+        """
+        content = """&model_nml
+   debug                        = 0,
+/"""
+        nml_file = create_test_namelist(content)
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            nml = Namelist(str(nml_file))
+            nml.update_namelist_param("model_nml", "debug", 1, string=False)
+            assert "= 1," in nml.content
+            assert "1." not in nml.content
+        finally:
+            os.chdir(original_cwd)
+
 
 # ============================================================================
 # Mark all tests in this module as unit tests
