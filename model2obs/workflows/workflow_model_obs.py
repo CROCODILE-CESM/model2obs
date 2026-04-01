@@ -58,6 +58,7 @@ class WorkflowModelObs(workflow.Workflow):
         """
 
         super().__init__(config)
+        self._namelist = None
         self.input_nml_template = files('model2obs.utils').joinpath('input_template.nml')
         self.model_obs_df = None
         self.perfect_model_obs_log_file = "perfect_model_obs.log"
@@ -1082,3 +1083,19 @@ class WorkflowModelObs(workflow.Workflow):
     def get_failed_model_obs_df(self, compute: Optional[bool] = False, path: Optional[str] = None) -> Union[pd.DataFrame, dd.DataFrame]:
         """Get only rows in model_obs_df corresponding to failed interpolations"""
         return self._get_model_obs_df(filters='failed', compute=compute, path=path)
+
+    def preview_namelist(self, filename: Optional[str] = None) -> None:
+        """Print to screen or store to file input.nml default"""
+
+        if not self._namelist:
+            self._initialize_model_namelist()
+
+        if filename is None:
+            print(self._namelist.content)
+
+        else:
+            self._namelist.write_namelist(filename)
+
+        return
+            
+    
