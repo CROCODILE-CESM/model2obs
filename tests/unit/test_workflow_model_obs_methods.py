@@ -412,6 +412,100 @@ class TestInitializeModelNamelist:
         assert "Continuing with existing obs_kind_nml" in captured.out
 
 
+class TestPreviewNamelist:
+    """Tests for preview_namelist() method."""
+
+    def _make_workflow_with_namelist(self, tmp_path, content: str = "nml content"):
+        """Return a WorkflowModelObs with a pre-set mock _namelist."""
+        config = {
+            'ocean_model': 'MOM6',
+            'model_files_folder': str(tmp_path),
+            'obs_seq_in_folder': str(tmp_path),
+            'output_folder': str(tmp_path),
+            'template_file': 'template.nc',
+            'static_file': 'static.nc',
+            'ocean_geometry': 'ocean.nc',
+            'perfect_model_obs_dir': str(tmp_path),
+            'parquet_folder': str(tmp_path),
+        }
+        workflow = WorkflowModelObs(config)
+        mock_nml = Mock()
+        mock_nml.content = content
+        workflow._namelist = mock_nml
+        return workflow
+
+    def test_preview_namelist_prints_to_stdout(self, tmp_path, capsys):
+        """Test preview_namelist prints namelist content when no filename given.
+
+        Given: A workflow with _namelist already initialized
+        When: preview_namelist() is called with no arguments
+        Then: The namelist content is printed to stdout
+        """
+        workflow = self._make_workflow_with_namelist(tmp_path, content="&model_nml\n/\n")
+        workflow.preview_namelist()
+
+        captured = capsys.readouterr()
+        assert "&model_nml" in captured.out
+        assert "/\n" in captured.out
+
+    def test_preview_namelist_writes_to_file(self, tmp_path):
+        """Test preview_namelist writes namelist to file when filename is given.
+
+        Given: A workflow with _namelist already initialized
+        When: preview_namelist(filename) is called
+        Then: write_namelist is called with the given filename and nothing is printed
+        """
+        workflow = self._make_workflow_with_namelist(tmp_path)
+        out_file = str(tmp_path / "output.nml")
+
+        workflow.preview_namelist(filename=out_file)
+
+        workflow._namelist.write_namelist.assert_called_once_with(out_file)
+
+    def test_preview_namelist_does_not_reinitialize(self, tmp_path):
+        """Test preview_namelist does not call _initialize_model_namelist when already set.
+
+        Given: A workflow with _namelist already initialized
+        When: preview_namelist() is called
+        Then: _initialize_model_namelist is not called again
+        """
+        workflow = self._make_workflow_with_namelist(tmp_path)
+
+        with patch.object(workflow, '_initialize_model_namelist') as mock_init:
+            workflow.preview_namelist()
+            mock_init.assert_not_called()
+
+    def test_preview_namelist_initializes_if_not_set(self, tmp_path):
+        """Test preview_namelist calls _initialize_model_namelist on a fresh instance.
+
+        Given: A freshly constructed workflow where _namelist is None
+        When: preview_namelist() is called
+        Then: _initialize_model_namelist is called to initialize the namelist
+        """
+        config = {
+            'ocean_model': 'MOM6',
+            'model_files_folder': str(tmp_path),
+            'obs_seq_in_folder': str(tmp_path),
+            'output_folder': str(tmp_path),
+            'template_file': 'template.nc',
+            'static_file': 'static.nc',
+            'ocean_geometry': 'ocean.nc',
+            'perfect_model_obs_dir': str(tmp_path),
+            'parquet_folder': str(tmp_path),
+        }
+        workflow = WorkflowModelObs(config)
+
+        mock_nml = Mock()
+        mock_nml.content = "nml content"
+
+        def fake_init():
+            workflow._namelist = mock_nml
+
+        with patch.object(workflow, '_initialize_model_namelist', side_effect=fake_init) as mock_init:
+            workflow.preview_namelist()
+            mock_init.assert_called_once()
+
+
 class TestProcessModelObsPair:
     """Tests for _process_model_obs_pair() method.
 
