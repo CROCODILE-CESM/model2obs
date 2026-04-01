@@ -249,6 +249,18 @@ class Namelist():
         updated = False
         section_end_idx = None
 
+        def get_decimals(value):
+            """Get number of decimals in value"""
+            if not isinstance(value, float) or value == 0.0:
+                return 6
+
+            sci = f"{value:.1e}"
+            print(sci)
+            if "e-" in sci:
+                exp = int(sci.split("e-")[1])
+                return exp
+            return 6
+
         # Find the section and handle parameter update/insertion
         for j, line in enumerate(lines):
             if line.strip().startswith(section_pattern):
@@ -273,6 +285,9 @@ class Namelist():
                         # Handle single-line parameter replacement
                         if string:
                             lines[j] = f'   {param.ljust(27)}= "{value}",'
+                        # If value is a float, format as fixed-point
+                        elif isinstance(value, float):
+                            lines[j] = f'   {param.ljust(27)}= {value:.{get_decimals(value)}f},'  # Adjust decimals as needed
                         else:
                             lines[j] = f'   {param.ljust(27)}= {value},'
                         updated = True
@@ -289,6 +304,9 @@ class Namelist():
                     # Insert single-line parameter
                     if string:
                         new_line = f'   {param.ljust(27)}= "{value}",'
+                    # If value is a float, format as fixed-point
+                    elif isinstance(value, float):
+                        new_line = f'   {param.ljust(27)}= {value:.{get_decimals(value)}f},'
                     else:
                         new_line = f'   {param.ljust(27)}= {value},'
                     lines.insert(section_end_idx, new_line)
