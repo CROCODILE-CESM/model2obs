@@ -929,3 +929,133 @@ FLOAT_SALINITY, QTY_SALINITY, COMMON_CODE
         
         with pytest.raises(ValueError, match="No observation type definitions found in"):
             config.parse_obs_def_ocean_mod(str(rst_file))
+
+
+class TestNetcdfConfigUtils:
+    """Tests for setup_netcdf_config_defaults and validate_netcdf_config."""
+
+    # ------------------------------------------------------------------ #
+    # setup_netcdf_config_defaults                                         #
+    # ------------------------------------------------------------------ #
+
+    def test_defaults_all_keys_absent(self):
+        """All default keys are added when config has none of them."""
+        cfg = {}
+        result = config.setup_netcdf_config_defaults(cfg)
+
+        assert result is cfg  # in-place modification returned
+        assert cfg['interpolate_only'] is False
+        assert cfg['netcdf_output_folder'] == 'netcdf_output'
+        assert cfg['netcdf_coord_tolerance'] == {
+            'longitude': 1e-2, 'latitude': 1e-2, 'depth': 1e-1
+        }
+
+    def test_existing_values_not_overwritten(self):
+        """Pre-existing values are preserved."""
+        cfg = {
+            'interpolate_only': True,
+            'netcdf_output_folder': 'custom_nc',
+            'netcdf_coord_tolerance': {'longitude': 0.5, 'latitude': 0.5, 'depth': 2.0},
+        }
+        config.setup_netcdf_config_defaults(cfg)
+
+        assert cfg['interpolate_only'] is True
+        assert cfg['netcdf_output_folder'] == 'custom_nc'
+        assert cfg['netcdf_coord_tolerance']['longitude'] == 0.5
+
+    def test_partial_tolerance_filled_with_defaults(self):
+        """Missing tolerance sub-keys get defaults; existing ones are kept."""
+        cfg = {'netcdf_coord_tolerance': {'latitude': 0.2}}
+        config.setup_netcdf_config_defaults(cfg)
+
+        assert cfg['netcdf_coord_tolerance']['latitude'] == 0.2
+        assert cfg['netcdf_coord_tolerance']['longitude'] == 1e-2
+        assert cfg['netcdf_coord_tolerance']['depth'] == 1e-1
+
+    def test_returns_same_dict(self):
+        """Return value is identical to the input dict."""
+        cfg = {}
+        assert config.setup_netcdf_config_defaults(cfg) is cfg
+
+    # ------------------------------------------------------------------ #
+    # validate_netcdf_config                                               #
+    # ------------------------------------------------------------------ #
+
+    def test_valid_config_passes(self, tmp_path):
+        """A correctly populated config passes without raising."""
+        cfg = {
+            'interpolate_only': False,
+            'netcdf_output_folder': str(tmp_path / 'nc_out'),
+            'netcdf_coord_tolerance': {'longitude': 0.01, 'latitude': 0.01, 'depth': 0.1},
+        }
+        config.validate_netcdf_config(cfg)  # must not raise
+
+    def test_creates_output_folder(self, tmp_path):
+        """netcdf_output_folder is created when it does not exist."""
+        out = tmp_path / 'new_nc_folder'
+        cfg = {
+            'interpolate_only': False,
+            'netcdf_output_folder': str(out),
+            'netcdf_coord_tolerance': {},
+        }
+        config.validate_netcdf_config(cfg)
+        assert out.is_dir()
+
+    def test_non_bool_interpolate_only_raises(self, tmp_path):
+        """Non-boolean interpolate_only raises ValueError."""
+        cfg = {
+            'interpolate_only': 'yes',
+            'netcdf_output_folder': str(tmp_path),
+            'netcdf_coord_tolerance': {},
+        }
+        with pytest.raises(ValueError, match="interpolate_only must be boolean"):
+            config.validate_netcdf_config(cfg)
+
+    def test_non_string_folder_raises(self, tmp_path):
+        """Non-string netcdf_output_folder raises ValueError."""
+        cfg = {
+            'interpolate_only': False,
+            'netcdf_output_folder': 42,
+            'netcdf_coord_tolerance': {},
+        }
+        with pytest.raises(ValueError, match="netcdf_output_folder must be a string"):
+            config.validate_netcdf_config(cfg)
+
+    def test_non_dict_tolerance_raises(self, tmp_path):
+        """Non-dict netcdf_coord_tolerance raises ValueError."""
+        cfg = {
+            'interpolate_only': False,
+            'netcdf_output_folder': str(tmp_path),
+            'netcdf_coord_tolerance': 'bad',
+        }
+        with pytest.raises(ValueError, match="netcdf_coord_tolerance must be a dictionary"):
+            config.validate_netcdf_config(cfg)
+
+    def test_negative_tolerance_raises(self, tmp_path):
+        """Negative tolerance value raises ValueError."""
+        cfg = {
+            'interpolate_only': False,
+            'netcdf_output_folder': str(tmp_path),
+            'netcdf_coord_tolerance': {'longitude': -0.1},
+        }
+        with pytest.raises(ValueError, match="netcdf_coord_tolerance\\['longitude'\\]"):
+            config.validate_netcdf_config(cfg)
+
+    def test_zero_tolerance_raises(self, tmp_path):
+        """Zero tolerance value raises ValueError (must be strictly positive)."""
+        cfg = {
+            'interpolate_only': False,
+            'netcdf_output_folder': str(tmp_path),
+            'netcdf_coord_tolerance': {'depth': 0},
+        }
+        with pytest.raises(ValueError, match="netcdf_coord_tolerance\\['depth'\\]"):
+            config.validate_netcdf_config(cfg)
+
+    def test_unknown_tolerance_keys_ignored(self, tmp_path):
+        """Extra tolerance keys not in the known set are silently ignored."""
+        cfg = {
+            'interpolate_only': False,
+            'netcdf_output_folder': str(tmp_path / 'nc'),
+            'netcdf_coord_tolerance': {'longitude': 0.01, 'pressure': 0.5},
+        }
+        config.validate_netcdf_config(cfg)  # must not raise

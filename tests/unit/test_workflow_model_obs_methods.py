@@ -1,7 +1,8 @@
 """Unit tests for WorkflowModelObs class methods.
 
 Tests cover initialization, configuration validation, file processing logic,
-and namelist manipulation without requiring external subprocess calls.
+namelist manipulation, and NetCDF output integration without requiring
+external subprocess calls.
 """
 
 import os
@@ -11,6 +12,7 @@ from unittest.mock import patch, Mock, MagicMock, call
 import numpy as np
 import xarray as xr
 import pandas as pd
+import dask.dataframe as dd
 from datetime import timedelta
 
 from model2obs.workflows.workflow_model_obs import WorkflowModelObs, RunOptions
@@ -95,7 +97,8 @@ class TestRunMethod:
                                    base_config, tmp_path, capsys):
         """Test run() clears output folders when clear_output=True.
 
-        The four standard folders are cleared via clear_folder(); tmp_folder is
+        Five standard folders are cleared via clear_folder() (parquet, input_nml_bck,
+        trimmed_obs_folder, output_folder, netcdf_output_folder); tmp_folder is
         wiped via shutil.rmtree so that leftover worker subdirectories are removed.
         """
         base_config['input_nml_bck'] = str(tmp_path / 'bck')
@@ -107,7 +110,7 @@ class TestRunMethod:
 
         workflow.run(clear_output=True, trim_obs=False)
 
-        assert mock_clear.call_count == 4
+        assert mock_clear.call_count == 5
         mock_rmtree.assert_called_once_with(base_config['tmp_folder'], ignore_errors=True)
         captured = capsys.readouterr()
         assert "Clearing all output folders" in captured.out
@@ -1486,6 +1489,197 @@ class TestParallelDispatch:
         call_args = mock_process_pair.call_args
         assert call_args[0][4] == 'polygon'
         assert call_args[0][5] == 'points'
+
+
+# ---------------------------------------------------------------------------
+# NetCDF output configuration and workflow method tests
+# ---------------------------------------------------------------------------
+
+def _base_config(tmp_path: Path) -> dict:
+    """Return a minimal MOM6 config with all required keys."""
+    return {
+        'ocean_model': 'MOM6',
+        'model_files_folder': str(tmp_path / 'model'),
+        'obs_seq_in_folder': str(tmp_path / 'obs'),
+        'output_folder': str(tmp_path / 'output'),
+        'template_file': str(tmp_path / 'template.nc'),
+        'static_file': str(tmp_path / 'static.nc'),
+        'ocean_geometry': str(tmp_path / 'ocean.nc'),
+        'perfect_model_obs_dir': str(tmp_path / 'dart'),
+        'parquet_folder': str(tmp_path / 'parquet'),
+    }
+
+
+def _make_parquet(parquet_folder: Path, index: int, time: pd.Timestamp) -> None:
+    """Write a minimal Parquet file resembling model-obs workflow output."""
+    df = pd.DataFrame({
+        'interpolated_model': [1.5, 2.3],
+        'longitude': [10.0, 20.0],
+        'latitude': [40.0, 50.0],
+        'vertical': [0.0, 10.0],
+        'time': [time, time],
+        'interpolated_model_QC': [0, 4],
+        'obs': [1.4, 2.2],
+        'obs_err_var': [0.01, 0.01],
+        'difference': [0.1, 0.1],
+        'abs_difference': [0.1, 0.1],
+        'squared_difference': [0.01, 0.01],
+        'normalized_difference': [1.0, 1.0],
+        'log_likelihood': [-1.0, -1.0],
+        'type': ['FLOAT_TEMPERATURE', 'FLOAT_TEMPERATURE'],
+    })
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.to_parquet(str(parquet_folder), name_function=lambda x: f"model-obs-{index}.parquet",
+                   write_metadata_file=True, write_index=False)
+
+
+class TestSetupNetcdfConfig:
+    """Tests for NetCDF config defaults injected via config_utils.setup_netcdf_config_defaults.
+
+    These tests verify the observable workflow behavior: after construction,
+    all NetCDF config keys carry the correct defaults regardless of whether
+    they were present in the user-supplied config.
+    """
+
+    def test_defaults_applied_when_keys_absent(self, tmp_path):
+        """Defaults are set for all three NetCDF keys if missing from config."""
+        config = _base_config(tmp_path)
+        workflow = WorkflowModelObs(config)
+
+        assert workflow.config['interpolate_only'] is False
+        assert workflow.config['netcdf_output_folder'] == 'netcdf_output'
+        assert workflow.config['netcdf_coord_tolerance'] == {
+            'longitude': 1e-2, 'latitude': 1e-2, 'depth': 1e-1
+        }
+
+    def test_existing_values_not_overwritten(self, tmp_path):
+        """User-supplied NetCDF config values are preserved."""
+        config = _base_config(tmp_path)
+        config['interpolate_only'] = True
+        config['netcdf_output_folder'] = 'my_nc_folder'
+        config['netcdf_coord_tolerance'] = {'longitude': 0.5, 'latitude': 0.5, 'depth': 1.0}
+
+        workflow = WorkflowModelObs(config)
+
+        assert workflow.config['interpolate_only'] is True
+        assert workflow.config['netcdf_output_folder'] == 'my_nc_folder'
+        assert workflow.config['netcdf_coord_tolerance']['longitude'] == 0.5
+
+    def test_partial_tolerance_gets_remaining_defaults(self, tmp_path):
+        """Missing tolerance keys are filled with defaults while others are kept."""
+        config = _base_config(tmp_path)
+        config['netcdf_coord_tolerance'] = {'longitude': 0.5}
+
+        workflow = WorkflowModelObs(config)
+
+        assert workflow.config['netcdf_coord_tolerance']['longitude'] == 0.5
+        assert workflow.config['netcdf_coord_tolerance']['latitude'] == 1e-2
+        assert workflow.config['netcdf_coord_tolerance']['depth'] == 1e-1
+
+
+class TestValidateNetcdfConfig:
+    """Tests for _validate_config NetCDF-specific checks (delegated to config_utils)."""
+
+    def test_non_bool_interpolate_only_raises(self, tmp_path):
+        """Non-boolean interpolate_only raises ValueError."""
+        config = _base_config(tmp_path)
+        workflow = WorkflowModelObs(config)
+        workflow.config['interpolate_only'] = 'yes'
+
+        with pytest.raises(ValueError, match="interpolate_only must be boolean"):
+            workflow._validate_config()
+
+    def test_invalid_tolerance_raises(self, tmp_path):
+        """Negative tolerance raises ValueError."""
+        config = _base_config(tmp_path)
+        workflow = WorkflowModelObs(config)
+        workflow.config['netcdf_coord_tolerance']['longitude'] = -1.0
+
+        with pytest.raises(ValueError, match="netcdf_coord_tolerance"):
+            workflow._validate_config()
+
+    def test_non_dict_tolerance_raises(self, tmp_path):
+        """Non-dict netcdf_coord_tolerance raises ValueError."""
+        config = _base_config(tmp_path)
+        workflow = WorkflowModelObs(config)
+        workflow.config['netcdf_coord_tolerance'] = 'not_a_dict'
+
+        with pytest.raises(ValueError, match="netcdf_coord_tolerance must be a dictionary"):
+            workflow._validate_config()
+
+
+def _make_merged_df(t0: pd.Timestamp) -> pd.DataFrame:
+    """Return a minimal merged DataFrame as produced by _merge_pair_to_parquet."""
+    return pd.DataFrame({
+        'interpolated_model': [1.5, 2.3],
+        'longitude': [10.0, 20.0],
+        'latitude': [40.0, 50.0],
+        'vertical': [0.0, 10.0],
+        'time': [t0, t0],
+        'interpolated_model_QC': [0, 4],
+    })
+
+
+class TestWritePairNetcdf:
+    """Tests for _write_pair_netcdf (per-pair NetCDF output)."""
+
+    def test_creates_netcdf_file(self, tmp_path):
+        """NetCDF file is created in netcdf_output_folder."""
+        config = _base_config(tmp_path)
+        config['interpolate_only'] = True
+        config['netcdf_output_folder'] = str(tmp_path / 'netcdf')
+        (tmp_path / 'netcdf').mkdir()
+
+        workflow = WorkflowModelObs(config)
+        merged = _make_merged_df(pd.Timestamp('2020-06-01 12:00:00'))
+        workflow._write_pair_netcdf(merged, pair_index=0)
+
+        assert (tmp_path / 'netcdf' / 'model-obs-0000.nc').exists()
+
+    def test_netcdf_has_expected_dimensions(self, tmp_path):
+        """Output NetCDF contains time, depth, latitude, and longitude dims."""
+        config = _base_config(tmp_path)
+        config['interpolate_only'] = True
+        config['netcdf_output_folder'] = str(tmp_path / 'netcdf')
+        (tmp_path / 'netcdf').mkdir()
+
+        workflow = WorkflowModelObs(config)
+        merged = _make_merged_df(pd.Timestamp('2020-06-01 12:00:00'))
+        workflow._write_pair_netcdf(merged, pair_index=0)
+
+        nc_path = tmp_path / 'netcdf' / 'model-obs-0000.nc'
+        with xr.open_dataset(str(nc_path)) as ds:
+            assert set(ds.dims) == {'time', 'depth', 'latitude', 'longitude'}
+
+    def test_error_does_not_raise(self, tmp_path):
+        """Errors inside write_interpolated_to_netcdf are caught and do not propagate."""
+        config = _base_config(tmp_path)
+        config['interpolate_only'] = True
+        config['netcdf_output_folder'] = str(tmp_path / 'netcdf')
+        (tmp_path / 'netcdf').mkdir()
+
+        workflow = WorkflowModelObs(config)
+        merged = _make_merged_df(pd.Timestamp('2020-06-01 12:00:00'))
+
+        with patch('model2obs.io.netcdf_output.write_interpolated_to_netcdf',
+                   side_effect=RuntimeError('boom')):
+            workflow._write_pair_netcdf(merged, pair_index=0)
+
+    def test_missing_columns_skips_silently(self, tmp_path):
+        """DataFrame missing required columns skips NetCDF without raising."""
+        config = _base_config(tmp_path)
+        config['interpolate_only'] = True
+        config['netcdf_output_folder'] = str(tmp_path / 'netcdf')
+        (tmp_path / 'netcdf').mkdir()
+
+        workflow = WorkflowModelObs(config)
+        incomplete = pd.DataFrame({'longitude': [1.0], 'latitude': [2.0]})
+
+        workflow._write_pair_netcdf(incomplete, pair_index=3)
+
+        assert not (tmp_path / 'netcdf' / 'model-obs-0003.nc').exists()
+
+
 
 
 pytestmark = pytest.mark.unit
