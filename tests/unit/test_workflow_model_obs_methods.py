@@ -1637,7 +1637,7 @@ class TestWritePairNetcdf:
         assert (tmp_path / 'netcdf' / 'model-obs-0000.nc').exists()
 
     def test_netcdf_has_expected_dimensions(self, tmp_path):
-        """Output NetCDF contains time, depth, latitude, and longitude dims."""
+        """Output NetCDF uses transect mode (bijective pairs) → time, depth, latitude dims."""
         config = _base_config(tmp_path)
         config['interpolate_only'] = True
         config['netcdf_output_folder'] = str(tmp_path / 'netcdf')
@@ -1649,7 +1649,10 @@ class TestWritePairNetcdf:
 
         nc_path = tmp_path / 'netcdf' / 'model-obs-0000.nc'
         with xr.open_dataset(str(nc_path)) as ds:
-            assert set(ds.dims) == {'time', 'depth', 'latitude', 'longitude'}
+            # _make_merged_df has bijective lat-lon pairs → transect mode (3-D)
+            assert set(ds.dims) == {'time', 'depth', 'latitude'}
+            assert 'longitude' in ds.coords
+            assert 'longitude' not in ds.dims
 
     def test_error_does_not_raise(self, tmp_path):
         """Errors inside write_interpolated_to_netcdf are caught and do not propagate."""

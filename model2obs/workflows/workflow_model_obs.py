@@ -974,12 +974,26 @@ class WorkflowModelObs(workflow.Workflow):
         obs_col = [col for col in trimmed.df.columns.to_list() if col.endswith("_observation") or col=="observation"]
         if len(obs_col) > 1:
             raise ValueError("More than one observation columns found.")
+        elif len(obs_col) == 0:
+            if not self.config.get('interpolate_only', False):
+                raise ValueError(
+                    "No observation column found in the original obs_seq file. "
+                    "Expected a column named 'observation' or ending in '_observation'."
+                )
+            # In interpolate_only mode the obs_seq.in file contains only
+            # observation locations/metadata with no actual observed values.
+            trimmed.df['obs'] = np.nan
         else:
-            trimmed.df = trimmed.df.rename(columns={obs_col[0]:"obs"})
+            trimmed.df = trimmed.df.rename(columns={obs_col[0]: "obs"})
 
-        qc_col = [col for col in perf_obs_out.df.columns.to_list() if col.endswith("_QC")]
+        # Use qc_copie_names (set by ObsSequence) as the authoritative source;
+        # fall back to the _QC suffix for files where that attribute is absent.
+        qc_col = [col for col in perf_obs_out.df.columns.to_list()
+                  if col in perf_obs_out.qc_copie_names or col.endswith("_QC")]
         if len(qc_col) > 1:
             raise ValueError("More than one QC column found.")
+        elif len(qc_col) == 0:
+            raise ValueError("No QC column found in perfect_model_obs output.")
         perf_model_col = 'interpolated_model'
         perf_model_col_QC = perf_model_col + "_QC"
         perf_obs_out.df = perf_obs_out.df.rename(

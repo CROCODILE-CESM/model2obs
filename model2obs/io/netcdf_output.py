@@ -2,8 +2,19 @@
 NetCDF output module for interpolated model-observation comparison data.
 
 This module provides functionality to convert interpolated model values from
-Dask DataFrames (stored in Parquet) to CF-compliant NetCDF4 files with a
-4D gridded structure (time, depth, latitude, longitude).
+Dask DataFrames (stored in Parquet) to CF-compliant NetCDF4 files.
+
+Two output structures are supported, selected automatically:
+
+- **Transect mode** – used when the (latitude, longitude) pairs form a
+  bijection (each unique latitude maps to exactly one longitude and vice
+  versa).  The output has three dimensions (time × depth × latitude) and
+  longitude is stored as a non-dimension coordinate ``longitude(latitude)``.
+  This eliminates the spurious NaN cells that would arise from a Cartesian
+  lat × lon cross-product.
+
+- **Grid mode** – used otherwise.  The output has four dimensions
+  (time × depth × latitude × longitude), matching the previous behaviour.
 """
 
 import warnings
@@ -12,6 +23,35 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import xarray as xr
+
+
+def _has_unique_latlon_pairs(
+    lat_arr: "np.ndarray",
+    lon_arr: "np.ndarray",
+) -> bool:
+    """Return ``True`` if the (latitude, longitude) pairs form a bijection.
+
+    A bijection exists when every unique latitude value maps to exactly one
+    unique longitude value **and** every unique longitude value maps to
+    exactly one unique latitude value.
+
+    Parameters
+    ----------
+    lat_arr:
+        1-D array of (rounded) latitude values.
+    lon_arr:
+        1-D array of (rounded) longitude values with the same length.
+
+    Returns
+    -------
+    bool
+        ``True`` when the pairs are bijective; ``False`` otherwise.
+    """
+    unique_pairs = set(zip(lat_arr, lon_arr))
+    lats = [p[0] for p in unique_pairs]
+    lons = [p[1] for p in unique_pairs]
+    # Each lat and each lon must appear exactly once across all unique pairs.
+    return len(lats) == len(set(lats)) and len(lons) == len(set(lons))
 
 
 def write_interpolated_to_netcdf(
@@ -23,9 +63,18 @@ def write_interpolated_to_netcdf(
     Write interpolated model-observation data to a CF-compliant NetCDF file.
 
     Converts a Dask DataFrame containing interpolated model values and their
-    coordinates to a 4D gridded NetCDF structure (time × depth × latitude ×
-    longitude).  Applies coordinate tolerance to merge nearby locations and
-    handles sparse data with NaN fill values.
+    coordinates to a gridded NetCDF structure.  Applies coordinate tolerance
+    to merge nearby locations.
+
+    The output structure is selected automatically:
+
+    - **Transect mode** – when the rounded (latitude, longitude) pairs form a
+      bijection (each latitude ↔ exactly one longitude).  Dimensions are
+      time × depth × latitude; longitude is stored as a non-dimension
+      coordinate ``longitude(latitude)``.  This avoids the NaN overhead of a
+      Cartesian lat × lon cross-product.
+    - **Grid mode** – otherwise.  Dimensions are time × depth × latitude ×
+      longitude (4-D), matching the original behaviour.
 
     Time is stored as datetime objects; xarray handles CF-compliant encoding
     automatically.
@@ -64,6 +113,8 @@ def write_interpolated_to_netcdf(
     - Missing grid points are filled with NaN (``_FillValue``).
     - Compression (zlib level 4) is applied to all variables.
     - Output follows CF conventions with proper attributes.
+    - Global attribute ``coordinate_structure`` records which mode was used
+      (``"transect"`` or ``"grid"``).
     """
     try:
         import dask.dataframe as dd
@@ -104,26 +155,17 @@ def write_interpolated_to_netcdf(
     df['latitude_rounded'] = np.round(df['latitude'] / tol_lat) * tol_lat
     df['depth_rounded'] = np.round(df['depth'] / tol_depth) * tol_depth
 
-    df = df.set_index(['time', 'depth_rounded', 'latitude_rounded', 'longitude_rounded'])
+    use_transect = _has_unique_latlon_pairs(
+        df['latitude_rounded'].values,
+        df['longitude_rounded'].values,
+    )
 
-    interpolated = df.groupby(level=[0, 1, 2, 3])['interpolated_model'].mean()
-    qc_flag = df.groupby(level=[0, 1, 2, 3])['interpolated_model_QC'].max()
-
-    ds_interp = interpolated.to_xarray().unstack(fill_value=np.nan)
-    ds_qc = qc_flag.to_xarray().unstack(fill_value=-999)
-
-    ds_interp = ds_interp.rename({
-        'depth_rounded': 'depth',
-        'latitude_rounded': 'latitude',
-        'longitude_rounded': 'longitude',
-    })
-    ds_qc = ds_qc.rename({
-        'depth_rounded': 'depth',
-        'latitude_rounded': 'latitude',
-        'longitude_rounded': 'longitude',
-    })
-
-    ds = xr.Dataset({'interpolated_model': ds_interp, 'qc_flag': ds_qc})
+    if use_transect:
+        ds = _build_transect_dataset(df)
+        coord_structure = 'transect'
+    else:
+        ds = _build_grid_dataset(df)
+        coord_structure = 'grid'
 
     ds['time'].attrs = {
         'standard_name': 'time',
@@ -143,21 +185,38 @@ def write_interpolated_to_netcdf(
         'long_name': 'Latitude',
         'axis': 'Y',
     }
-    ds['longitude'].attrs = {
+    lon_attrs = {
         'units': 'degrees_east',
         'standard_name': 'longitude',
         'long_name': 'Longitude',
-        'axis': 'X',
     }
+    if not use_transect:
+        # longitude is a full dimension only in grid mode
+        lon_attrs['axis'] = 'X'
+    ds['longitude'].attrs = lon_attrs
+
     ds['interpolated_model'].attrs = {
         'long_name': 'Interpolated model value at observation location',
         'coordinates': 'time depth latitude longitude',
     }
     ds['qc_flag'].attrs = {
-        'units': '1',
+        'units': '',
         'long_name': 'DART quality control flag',
         'coordinates': 'time depth latitude longitude',
     }
+
+    if use_transect:
+        comment = (
+            'Transect-structured dataset: each latitude maps to exactly one '
+            'longitude.  Longitude is stored as a non-dimension coordinate '
+            'longitude(latitude).  No NaN fill from lat×lon cross-product.'
+        )
+    else:
+        comment = (
+            'Sparse 4D grid with interpolated model values. '
+            'Missing grid points filled with NaN.'
+        )
+
     ds.attrs = {
         'title': 'Interpolated model values at observation locations',
         'source': 'CrocoCamp model-observation comparison workflow',
@@ -165,11 +224,9 @@ def write_interpolated_to_netcdf(
         'coordinate_tolerances': (
             f"longitude={tol_lon}, latitude={tol_lat}, depth={tol_depth}"
         ),
+        'coordinate_structure': coord_structure,
         'history': 'Created by CrocoCamp write_interpolated_to_netcdf',
-        'comment': (
-            'Sparse 4D grid with interpolated model values. '
-            'Missing grid points filled with NaN.'
-        ),
+        'comment': comment,
     }
 
     encoding = {
@@ -188,3 +245,87 @@ def write_interpolated_to_netcdf(
         ds.to_netcdf(output_path, format='NETCDF4', encoding=encoding)
     except Exception as exc:
         raise IOError(f"Failed to write NetCDF file {output_path}: {exc}") from exc
+
+
+def _build_transect_dataset(df: pd.DataFrame) -> xr.Dataset:
+    """Build a 3-D transect-mode xarray Dataset.
+
+    Dimensions are ``(time, depth, latitude)``.  Longitude is added as a
+    non-dimension coordinate ``longitude(latitude)`` using the bijective
+    lat → lon mapping present in *df*.
+
+    Parameters
+    ----------
+    df:
+        DataFrame with columns ``time``, ``depth_rounded``,
+        ``latitude_rounded``, ``longitude_rounded``,
+        ``interpolated_model``, and ``interpolated_model_QC``.
+        The rounded columns must already satisfy the bijection property.
+
+    Returns
+    -------
+    xr.Dataset
+    """
+    grouped = df.groupby(['time', 'depth_rounded', 'latitude_rounded'])
+    interpolated = grouped['interpolated_model'].mean()
+    qc_flag = grouped['interpolated_model_QC'].max()
+
+    ds_interp = interpolated.to_xarray()
+    ds_qc = qc_flag.to_xarray().astype('int32')
+
+    ds_interp = ds_interp.rename({'depth_rounded': 'depth', 'latitude_rounded': 'latitude'})
+    ds_qc = ds_qc.rename({'depth_rounded': 'depth', 'latitude_rounded': 'latitude'})
+
+    ds = xr.Dataset({'interpolated_model': ds_interp, 'qc_flag': ds_qc})
+
+    # Build the lat → lon mapping (bijective by construction)
+    lat_lon = (
+        df[['latitude_rounded', 'longitude_rounded']]
+        .drop_duplicates()
+        .set_index('latitude_rounded')['longitude_rounded']
+        .sort_index()
+    )
+    lat_vals = ds['latitude'].values
+    lon_vals = lat_lon.reindex(lat_vals).values
+    ds = ds.assign_coords(
+        longitude=xr.DataArray(lon_vals, coords=[lat_vals], dims=['latitude'])
+    )
+
+    return ds
+
+
+def _build_grid_dataset(df: pd.DataFrame) -> xr.Dataset:
+    """Build a 4-D grid-mode xarray Dataset.
+
+    Dimensions are ``(time, depth, latitude, longitude)``.  Unobserved
+    grid points are filled with NaN / -999.
+
+    Parameters
+    ----------
+    df:
+        DataFrame with columns ``time``, ``depth_rounded``,
+        ``latitude_rounded``, ``longitude_rounded``,
+        ``interpolated_model``, and ``interpolated_model_QC``.
+
+    Returns
+    -------
+    xr.Dataset
+    """
+    df_indexed = df.set_index(
+        ['time', 'depth_rounded', 'latitude_rounded', 'longitude_rounded']
+    )
+    interpolated = df_indexed.groupby(level=[0, 1, 2, 3])['interpolated_model'].mean()
+    qc_flag = df_indexed.groupby(level=[0, 1, 2, 3])['interpolated_model_QC'].max()
+
+    ds_interp = interpolated.to_xarray().unstack(fill_value=np.nan)
+    ds_qc = qc_flag.to_xarray().unstack(fill_value=-999).astype('int32')
+
+    rename_map = {
+        'depth_rounded': 'depth',
+        'latitude_rounded': 'latitude',
+        'longitude_rounded': 'longitude',
+    }
+    ds_interp = ds_interp.rename(rename_map)
+    ds_qc = ds_qc.rename(rename_map)
+
+    return xr.Dataset({'interpolated_model': ds_interp, 'qc_flag': ds_qc})

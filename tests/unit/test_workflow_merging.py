@@ -102,6 +102,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -127,6 +128,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -157,6 +159,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -184,6 +187,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -211,6 +215,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -241,6 +246,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -278,6 +284,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = model_df.copy()
         
@@ -310,6 +317,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC', 'model_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -348,6 +356,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -376,6 +385,7 @@ class TestMergePairToParquet:
         
         mock_model = Mock()
         mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
         mock_obs = Mock()
         mock_obs.df = obs_df
         
@@ -394,8 +404,109 @@ class TestMergePairToParquet:
         
         assert result['time'].is_monotonic_increasing
 
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
+    def test_no_observation_column_interpolate_only_uses_nan(
+        self, mock_obsq, workflow, tmp_path
+    ):
+        """obs column is NaN when obs_seq.in has no observation copies (interpolate_only mode)."""
+        workflow.config['interpolate_only'] = True
 
-class TestMergeModelObsToParquet:
+        model_df = pd.DataFrame({
+            'obs_num': [1, 2],
+            'longitude': [10.0, 11.0],
+            'latitude': [40.0, 41.0],
+            'vertical': [0.0, 10.0],
+            'time': pd.to_datetime(['2020-01-01', '2020-01-01']),
+            'type': ['TEMP', 'TEMP'],
+            'days': [0, 0],
+            'seconds': [0, 3600],
+            'truth': [20.0, 21.0],
+            'Quality_Control': [0, 0],
+            'obs_err_var': [0.01, 0.01],
+        })
+        # No 'observation' column — only locations/metadata, as in interpolate_only input files
+        obs_df = pd.DataFrame({
+            'obs_num': [1, 2],
+            'longitude': [10.0, 11.0],
+            'latitude': [40.0, 41.0],
+            'vertical': [0.0, 10.0],
+            'time': pd.to_datetime(['2020-01-01', '2020-01-01']),
+            'type': ['TEMP', 'TEMP'],
+            'days': [0, 0],
+            'seconds': [0, 3600],
+            'obs_err_var': [0.01, 0.01],
+        })
+
+        mock_model = Mock()
+        mock_model.df = model_df
+        mock_model.qc_copie_names = ['Quality_Control']
+        mock_obs = Mock()
+        mock_obs.df = obs_df
+
+        mock_obsq.side_effect = [mock_model, mock_obs]
+
+        parquet_path = tmp_path / "parquet"
+        parquet_path.mkdir()
+
+        workflow._merge_pair_to_parquet("perf_obs.out", "obs_seq.in", str(parquet_path))
+
+        result = dd.read_parquet(str(parquet_path)).compute()
+        assert 'obs' in result.columns
+        assert result['obs'].isna().all()
+
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
+    def test_no_observation_column_non_interpolate_only_raises_error(
+        self, mock_obsq, workflow, tmp_path
+    ):
+        """Missing observation column raises ValueError when not in interpolate_only mode."""
+        workflow.config['interpolate_only'] = False
+
+        model_df = pd.DataFrame({
+            'obs_num': [1],
+            'truth': [20.0],
+            'truth_QC': [0],
+        })
+        obs_df = pd.DataFrame({
+            'obs_num': [1],
+        })
+
+        mock_model = Mock()
+        mock_model.df = model_df
+        mock_model.qc_copie_names = ['truth_QC']
+        mock_obs = Mock()
+        mock_obs.df = obs_df
+
+        mock_obsq.side_effect = [mock_model, mock_obs]
+
+        parquet_path = tmp_path / "parquet"
+        parquet_path.mkdir()
+
+        with pytest.raises(ValueError, match="No observation column found"):
+            workflow._merge_pair_to_parquet("perf_obs.out", "obs_seq.in", str(parquet_path))
+
+    @patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence')
+    def test_qc_column_named_quality_control(self, mock_obsq, workflow, mock_obs_dataframes, tmp_path):
+        """QC column named 'Quality_Control' (from DART output) is correctly detected."""
+        model_df = mock_obs_dataframes['model'].copy()
+        # Replace truth_QC (ends with _QC) with Quality_Control (does not end with _QC)
+        model_df = model_df.rename(columns={'truth_QC': 'Quality_Control'})
+        obs_df = mock_obs_dataframes['obs'].copy()
+
+        mock_model = Mock()
+        mock_model.df = model_df
+        mock_model.qc_copie_names = ['Quality_Control']
+        mock_obs = Mock()
+        mock_obs.df = obs_df
+
+        mock_obsq.side_effect = [mock_model, mock_obs]
+
+        parquet_path = tmp_path / "parquet"
+        parquet_path.mkdir()
+
+        workflow._merge_pair_to_parquet("perf_obs.out", "obs_seq.in", str(parquet_path))
+
+        result = dd.read_parquet(str(parquet_path)).compute()
+        assert 'interpolated_model_QC' in result.columns
     """Test suite for merge_model_obs_to_parquet() method."""
     
     @pytest.fixture

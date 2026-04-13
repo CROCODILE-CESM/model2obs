@@ -9,7 +9,10 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from model2obs.io.netcdf_output import write_interpolated_to_netcdf
+from model2obs.io.netcdf_output import (
+    _has_unique_latlon_pairs,
+    write_interpolated_to_netcdf,
+)
 
 _T0 = pd.Timestamp("2020-06-15 12:00:00")
 
@@ -78,6 +81,25 @@ def sparse_grid_ddf() -> dd.DataFrame:
     return dd.from_pandas(df, npartitions=1)
 
 
+@pytest.fixture
+def grid_ddf() -> dd.DataFrame:
+    """Return a Dask DataFrame whose lat-lon pairs are NOT bijective.
+
+    Latitude 40.0 appears with two different longitudes (10.0 and 20.0),
+    so the output must use grid mode (4-D).  The unfilled grid cell
+    (lat=50, lon=10) contains NaN.
+    """
+    df = pd.DataFrame({
+        "interpolated_model": [1.0, 2.0, 3.0],
+        "longitude": [10.0, 20.0, 10.0],
+        "latitude": [40.0, 40.0, 50.0],
+        "vertical": [0.0, 0.0, 0.0],
+        "time": pd.to_datetime([_T0, _T0, _T0]).astype("datetime64[s]"),
+        "interpolated_model_QC": [0, 0, 0],
+    })
+    return dd.from_pandas(df, npartitions=1)
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -105,11 +127,11 @@ class TestDimensions:
     """Tests for coordinate dimensions in the output dataset."""
 
     def test_output_has_four_dimensions(
-        self, sample_ddf: dd.DataFrame, tmp_path: Path
+        self, grid_ddf: dd.DataFrame, tmp_path: Path
     ):
-        """Output dataset contains time, depth, latitude, and longitude dims."""
+        """Grid-mode output contains time, depth, latitude, and longitude dims."""
         out = tmp_path / "out.nc"
-        write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
+        write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
             assert set(ds.dims) == {"time", "depth", "latitude", "longitude"}
 
@@ -128,11 +150,11 @@ class TestDataVariables:
     """Tests for the data variables in the output dataset."""
 
     def test_interpolated_model_variable_present(
-        self, sample_ddf: dd.DataFrame, tmp_path: Path
+        self, grid_ddf: dd.DataFrame, tmp_path: Path
     ):
-        """'interpolated_model' variable exists with all four dimensions."""
+        """'interpolated_model' variable exists with all four dimensions in grid mode."""
         out = tmp_path / "out.nc"
-        write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
+        write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
             assert "interpolated_model" in ds
             assert set(ds["interpolated_model"].dims) == {
@@ -140,11 +162,11 @@ class TestDataVariables:
             }
 
     def test_qc_flag_variable_present(
-        self, sample_ddf: dd.DataFrame, tmp_path: Path
+        self, grid_ddf: dd.DataFrame, tmp_path: Path
     ):
-        """'qc_flag' variable exists with all four dimensions."""
+        """'qc_flag' variable exists with all four dimensions in grid mode."""
         out = tmp_path / "out.nc"
-        write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
+        write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
             assert "qc_flag" in ds
             assert set(ds["qc_flag"].dims) == {
@@ -171,11 +193,11 @@ class TestFillValue:
     """Tests for NaN fill behaviour at unobserved grid points."""
 
     def test_missing_grid_point_is_nan(
-        self, sparse_grid_ddf: dd.DataFrame, tmp_path: Path
+        self, grid_ddf: dd.DataFrame, tmp_path: Path
     ):
         """Grid cells with no observation contain NaN in interpolated_model."""
         out = tmp_path / "out.nc"
-        write_interpolated_to_netcdf(sparse_grid_ddf, str(out), _DEFAULT_TOLERANCES)
+        write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
             values = ds["interpolated_model"].values
             nan_count = np.sum(np.isnan(values))
@@ -252,3 +274,121 @@ class TestEdgeCases:
         out = tmp_path / "bad.nc"
         with pytest.raises(ValueError, match="missing required columns"):
             write_interpolated_to_netcdf(ddf, str(out), _DEFAULT_TOLERANCES)
+
+
+# ---------------------------------------------------------------------------
+# New tests for the bijection check helper
+# ---------------------------------------------------------------------------
+
+class TestHasUniqueLatLonPairs:
+    """Unit tests for the _has_unique_latlon_pairs helper."""
+
+    def test_bijective_pairs_return_true(self):
+        """Distinct one-to-one lat-lon pairs are detected as bijective."""
+        lat = np.array([40.0, 50.0, 60.0])
+        lon = np.array([10.0, 20.0, 30.0])
+        assert _has_unique_latlon_pairs(lat, lon) is True
+
+    def test_same_lat_two_lons_returns_false(self):
+        """A latitude paired with two different longitudes is not bijective."""
+        lat = np.array([40.0, 40.0, 50.0])
+        lon = np.array([10.0, 20.0, 30.0])
+        assert _has_unique_latlon_pairs(lat, lon) is False
+
+    def test_same_lon_two_lats_returns_false(self):
+        """A longitude paired with two different latitudes is not bijective."""
+        lat = np.array([40.0, 50.0, 60.0])
+        lon = np.array([10.0, 10.0, 30.0])
+        assert _has_unique_latlon_pairs(lat, lon) is False
+
+    def test_single_observation_returns_true(self):
+        """A single (lat, lon) pair is trivially bijective."""
+        assert _has_unique_latlon_pairs(np.array([40.0]), np.array([10.0])) is True
+
+    def test_duplicate_identical_pairs_return_true(self):
+        """Repeated identical pairs deduplicate to a bijective set."""
+        lat = np.array([40.0, 40.0, 50.0, 50.0])
+        lon = np.array([10.0, 10.0, 20.0, 20.0])
+        assert _has_unique_latlon_pairs(lat, lon) is True
+
+
+# ---------------------------------------------------------------------------
+# New tests for transect mode (bijective lat-lon)
+# ---------------------------------------------------------------------------
+
+class TestTransectMode:
+    """Tests for transect-mode output (bijective lat-lon pairs)."""
+
+    def test_transect_mode_has_three_dimensions(
+        self, sample_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """Bijective input produces a dataset with time, depth, latitude dims only."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
+        with xr.open_dataset(str(out)) as ds:
+            assert set(ds.dims) == {"time", "depth", "latitude"}
+
+    def test_transect_mode_longitude_is_coordinate_not_dim(
+        self, sample_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """Longitude is present as a coordinate but not as a dimension."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
+        with xr.open_dataset(str(out)) as ds:
+            assert "longitude" in ds.coords
+            assert "longitude" not in ds.dims
+
+    def test_transect_mode_no_spurious_nans(
+        self, tmp_path: Path
+    ):
+        """Transect mode adds no NaN cells from a lon dimension cross-product.
+
+        We use a fixture where every (time, depth) combination has exactly one
+        observation per latitude, so the 3-D grid (time × depth × latitude) is
+        fully dense — no NaN at all.  This confirms that longitude does not
+        inflate the dataset with empty cells.
+        """
+        df = pd.DataFrame({
+            "interpolated_model": [1.5, 2.3, 0.8],
+            "longitude": [10.0, 20.0, 30.0],
+            "latitude": [40.0, 50.0, 60.0],
+            "vertical": [0.0, 0.0, 0.0],   # same depth for all
+            "time": pd.to_datetime([_T0, _T0, _T0]).astype("datetime64[s]"),
+            "interpolated_model_QC": [0, 4, 1018],
+        })
+        ddf = dd.from_pandas(df, npartitions=1)
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(ddf, str(out), _DEFAULT_TOLERANCES)
+        with xr.open_dataset(str(out)) as ds:
+            assert not np.any(np.isnan(ds["interpolated_model"].values))
+
+    def test_transect_mode_longitude_values_correct(
+        self, sample_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """Longitude coordinate values match the original input data."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
+        with xr.open_dataset(str(out)) as ds:
+            np.testing.assert_allclose(
+                sorted(ds["longitude"].values),
+                sorted([10.0, 20.0, 30.0]),
+                atol=1e-2,
+            )
+
+    def test_transect_mode_coordinate_structure_attr(
+        self, sample_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """Global attribute coordinate_structure is set to 'transect'."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
+        with xr.open_dataset(str(out)) as ds:
+            assert ds.attrs.get("coordinate_structure") == "transect"
+
+    def test_grid_mode_coordinate_structure_attr(
+        self, grid_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """Global attribute coordinate_structure is set to 'grid' for non-bijective input."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
+        with xr.open_dataset(str(out)) as ds:
+            assert ds.attrs.get("coordinate_structure") == "grid"
