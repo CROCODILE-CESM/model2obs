@@ -1617,6 +1617,7 @@ def _make_merged_df(t0: pd.Timestamp) -> pd.DataFrame:
         'vertical': [0.0, 10.0],
         'time': [t0, t0],
         'interpolated_model_QC': [0, 4],
+        'type': ['FLOAT_TEMPERATURE', 'FLOAT_TEMPERATURE'],
     })
 
 

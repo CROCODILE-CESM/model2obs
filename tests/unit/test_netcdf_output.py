@@ -26,7 +26,7 @@ _DEFAULT_TOLERANCES = {"longitude": 1e-2, "latitude": 1e-2, "depth": 1e-1}
 
 @pytest.fixture
 def sample_ddf() -> dd.DataFrame:
-    """Return a Dask DataFrame with 3 valid observations.
+    """Return a Dask DataFrame with 3 valid observations of type TEMPERATURE.
 
     Each row has a distinct longitude, latitude, and depth so the output
     grid contains exactly 3 non-NaN cells.  All rows share the same
@@ -39,6 +39,7 @@ def sample_ddf() -> dd.DataFrame:
         "vertical": [0.0, 10.0, 50.0],
         "time": pd.to_datetime([_T0, _T0, _T0]).astype("datetime64[s]"),
         "interpolated_model_QC": [0, 4, 1018],
+        "type": ["TEMPERATURE", "TEMPERATURE", "TEMPERATURE"],
     })
     return dd.from_pandas(df, npartitions=1)
 
@@ -58,6 +59,7 @@ def two_lat_ddf() -> dd.DataFrame:
         "vertical": [5.0, 5.0],
         "time": pd.to_datetime([_T0, _T0]).astype("datetime64[s]"),
         "interpolated_model_QC": [0, 0],
+        "type": ["TEMPERATURE", "TEMPERATURE"],
     })
     return dd.from_pandas(df, npartitions=1)
 
@@ -77,6 +79,7 @@ def sparse_grid_ddf() -> dd.DataFrame:
         "vertical": [0.0, 0.0],
         "time": pd.to_datetime([_T0, _T0]).astype("datetime64[s]"),
         "interpolated_model_QC": [0, 0],
+        "type": ["TEMPERATURE", "TEMPERATURE"],
     })
     return dd.from_pandas(df, npartitions=1)
 
@@ -96,6 +99,7 @@ def grid_ddf() -> dd.DataFrame:
         "vertical": [0.0, 0.0, 0.0],
         "time": pd.to_datetime([_T0, _T0, _T0]).astype("datetime64[s]"),
         "interpolated_model_QC": [0, 0, 0],
+        "type": ["TEMPERATURE", "TEMPERATURE", "TEMPERATURE"],
     })
     return dd.from_pandas(df, npartitions=1)
 
@@ -152,24 +156,24 @@ class TestDataVariables:
     def test_interpolated_model_variable_present(
         self, grid_ddf: dd.DataFrame, tmp_path: Path
     ):
-        """'interpolated_model' variable exists with all four dimensions in grid mode."""
+        """'interpolated_TEMPERATURE' variable exists with all four dimensions in grid mode."""
         out = tmp_path / "out.nc"
         write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
-            assert "interpolated_model" in ds
-            assert set(ds["interpolated_model"].dims) == {
+            assert "interpolated_TEMPERATURE" in ds
+            assert set(ds["interpolated_TEMPERATURE"].dims) == {
                 "time", "depth", "latitude", "longitude"
             }
 
     def test_qc_flag_variable_present(
         self, grid_ddf: dd.DataFrame, tmp_path: Path
     ):
-        """'qc_flag' variable exists with all four dimensions in grid mode."""
+        """'qc_flag_TEMPERATURE' variable exists with all four dimensions in grid mode."""
         out = tmp_path / "out.nc"
         write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
-            assert "qc_flag" in ds
-            assert set(ds["qc_flag"].dims) == {
+            assert "qc_flag_TEMPERATURE" in ds
+            assert set(ds["qc_flag_TEMPERATURE"].dims) == {
                 "time", "depth", "latitude", "longitude"
             }
 
@@ -195,11 +199,11 @@ class TestFillValue:
     def test_missing_grid_point_is_nan(
         self, grid_ddf: dd.DataFrame, tmp_path: Path
     ):
-        """Grid cells with no observation contain NaN in interpolated_model."""
+        """Grid cells with no observation contain NaN in interpolated_TEMPERATURE."""
         out = tmp_path / "out.nc"
         write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
-            values = ds["interpolated_model"].values
+            values = ds["interpolated_TEMPERATURE"].values
             nan_count = np.sum(np.isnan(values))
             assert nan_count > 0
 
@@ -236,11 +240,11 @@ class TestQCFlagAttributes:
     def test_qc_flag_lacks_range_and_flag_metadata(
         self, sample_ddf: dd.DataFrame, tmp_path: Path
     ):
-        """qc_flag has no valid_range, flag_values, or flag_meanings attrs."""
+        """qc_flag_TEMPERATURE has no valid_range, flag_values, or flag_meanings attrs."""
         out = tmp_path / "out.nc"
         write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
-            attrs = ds["qc_flag"].attrs
+            attrs = ds["qc_flag_TEMPERATURE"].attrs
             assert "valid_range" not in attrs
             assert "flag_values" not in attrs
             assert "flag_meanings" not in attrs
@@ -253,7 +257,7 @@ class TestEdgeCases:
         """An empty Dask DataFrame produces a valid (empty) NetCDF file."""
         df = pd.DataFrame(columns=[
             "interpolated_model", "longitude", "latitude",
-            "vertical", "time", "interpolated_model_QC",
+            "vertical", "time", "interpolated_model_QC", "type",
         ])
         ddf = dd.from_pandas(df, npartitions=1)
         out = tmp_path / "empty.nc"
@@ -355,12 +359,13 @@ class TestTransectMode:
             "vertical": [0.0, 0.0, 0.0],   # same depth for all
             "time": pd.to_datetime([_T0, _T0, _T0]).astype("datetime64[s]"),
             "interpolated_model_QC": [0, 4, 1018],
+            "type": ["TEMPERATURE", "TEMPERATURE", "TEMPERATURE"],
         })
         ddf = dd.from_pandas(df, npartitions=1)
         out = tmp_path / "out.nc"
         write_interpolated_to_netcdf(ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
-            assert not np.any(np.isnan(ds["interpolated_model"].values))
+            assert not np.any(np.isnan(ds["interpolated_TEMPERATURE"].values))
 
     def test_transect_mode_longitude_values_correct(
         self, sample_ddf: dd.DataFrame, tmp_path: Path
@@ -392,3 +397,148 @@ class TestTransectMode:
         write_interpolated_to_netcdf(grid_ddf, str(out), _DEFAULT_TOLERANCES)
         with xr.open_dataset(str(out)) as ds:
             assert ds.attrs.get("coordinate_structure") == "grid"
+
+
+# ---------------------------------------------------------------------------
+# Tests for per-obs-type variable generation
+# ---------------------------------------------------------------------------
+
+class TestPerTypeVariables:
+    """Tests for per-observation-type variable naming in the output dataset."""
+
+    @pytest.fixture
+    def multi_type_transect_ddf(self) -> dd.DataFrame:
+        """Return a bijective DataFrame with two observation types.
+
+        TEMPERATURE at lat 40/50 and SALINITY at lat 40/50 (same locations).
+        Both types share the same transect layout.
+        """
+        df = pd.DataFrame({
+            "interpolated_model": [1.5, 2.3, 35.0, 35.5],
+            "longitude": [10.0, 20.0, 10.0, 20.0],
+            "latitude": [40.0, 50.0, 40.0, 50.0],
+            "vertical": [0.0, 0.0, 0.0, 0.0],
+            "time": pd.to_datetime([_T0, _T0, _T0, _T0]).astype("datetime64[s]"),
+            "interpolated_model_QC": [0, 0, 0, 0],
+            "type": ["TEMPERATURE", "TEMPERATURE", "SALINITY", "SALINITY"],
+        })
+        return dd.from_pandas(df, npartitions=1)
+
+    @pytest.fixture
+    def sparse_type_transect_ddf(self) -> dd.DataFrame:
+        """Return a bijective DataFrame where the two types cover different latitudes.
+
+        TEMPERATURE is observed at lat=40 only; SALINITY at lat=50 only.
+        Both share the same longitude mapping (40↔10, 50↔20).
+        On the shared 2-latitude grid, each type will have one NaN cell.
+        """
+        df = pd.DataFrame({
+            "interpolated_model": [1.5, 35.5],
+            "longitude": [10.0, 20.0],
+            "latitude": [40.0, 50.0],
+            "vertical": [0.0, 0.0],
+            "time": pd.to_datetime([_T0, _T0]).astype("datetime64[s]"),
+            "interpolated_model_QC": [0, 0],
+            "type": ["TEMPERATURE", "SALINITY"],
+        })
+        return dd.from_pandas(df, npartitions=1)
+
+    @pytest.fixture
+    def multi_type_grid_ddf(self) -> dd.DataFrame:
+        """Return a non-bijective DataFrame with two observation types.
+
+        Lat 40 maps to both lon 10 and lon 20, forcing grid mode.
+        TEMPERATURE covers (lat=40,lon=10) and (lat=40,lon=20).
+        SALINITY covers (lat=40,lon=10) and (lat=50,lon=10).
+        """
+        df = pd.DataFrame({
+            "interpolated_model": [1.0, 2.0, 35.0, 36.0],
+            "longitude": [10.0, 20.0, 10.0, 10.0],
+            "latitude": [40.0, 40.0, 40.0, 50.0],
+            "vertical": [0.0, 0.0, 0.0, 0.0],
+            "time": pd.to_datetime([_T0, _T0, _T0, _T0]).astype("datetime64[s]"),
+            "interpolated_model_QC": [0, 0, 0, 0],
+            "type": ["TEMPERATURE", "TEMPERATURE", "SALINITY", "SALINITY"],
+        })
+        return dd.from_pandas(df, npartitions=1)
+
+    def test_multi_type_variables_present_transect(
+        self, multi_type_transect_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """Both interpolated_TEMPERATURE and interpolated_SALINITY are present."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(
+            multi_type_transect_ddf, str(out), _DEFAULT_TOLERANCES
+        )
+        with xr.open_dataset(str(out)) as ds:
+            assert "interpolated_TEMPERATURE" in ds
+            assert "interpolated_SALINITY" in ds
+            assert "qc_flag_TEMPERATURE" in ds
+            assert "qc_flag_SALINITY" in ds
+
+    def test_no_generic_interpolated_model_variable(
+        self, multi_type_transect_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """The old 'interpolated_model' variable is no longer generated."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(
+            multi_type_transect_ddf, str(out), _DEFAULT_TOLERANCES
+        )
+        with xr.open_dataset(str(out)) as ds:
+            assert "interpolated_model" not in ds
+            assert "qc_flag" not in ds
+
+    def test_multi_type_variables_present_grid(
+        self, multi_type_grid_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """Both types generate variables in grid mode."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(
+            multi_type_grid_ddf, str(out), _DEFAULT_TOLERANCES
+        )
+        with xr.open_dataset(str(out)) as ds:
+            assert "interpolated_TEMPERATURE" in ds
+            assert "interpolated_SALINITY" in ds
+            assert set(ds["interpolated_TEMPERATURE"].dims) == {
+                "time", "depth", "latitude", "longitude"
+            }
+
+    def test_per_type_values_correct(
+        self, multi_type_transect_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """Each type variable contains only its own observations."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(
+            multi_type_transect_ddf, str(out), _DEFAULT_TOLERANCES
+        )
+        with xr.open_dataset(str(out)) as ds:
+            temp_vals = sorted(ds["interpolated_TEMPERATURE"].values.ravel().tolist())
+            sal_vals = sorted(ds["interpolated_SALINITY"].values.ravel().tolist())
+            np.testing.assert_allclose(temp_vals, [1.5, 2.3], atol=1e-3)
+            np.testing.assert_allclose(sal_vals, [35.0, 35.5], atol=1e-3)
+
+    def test_sparse_type_produces_nans_on_shared_grid(
+        self, sparse_type_transect_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """A type covering only part of the grid gets NaN at the missing locations."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(
+            sparse_type_transect_ddf, str(out), _DEFAULT_TOLERANCES
+        )
+        with xr.open_dataset(str(out)) as ds:
+            # TEMPERATURE only at lat=40 → lat=50 cell is NaN
+            temp_vals = ds["interpolated_TEMPERATURE"].values.ravel()
+            assert np.sum(np.isnan(temp_vals)) == 1
+            # SALINITY only at lat=50 → lat=40 cell is NaN
+            sal_vals = ds["interpolated_SALINITY"].values.ravel()
+            assert np.sum(np.isnan(sal_vals)) == 1
+
+    def test_single_type_uses_type_name(
+        self, sample_ddf: dd.DataFrame, tmp_path: Path
+    ):
+        """A single-type DataFrame produces 'interpolated_TEMPERATURE', not 'interpolated_model'."""
+        out = tmp_path / "out.nc"
+        write_interpolated_to_netcdf(sample_ddf, str(out), _DEFAULT_TOLERANCES)
+        with xr.open_dataset(str(out)) as ds:
+            assert "interpolated_TEMPERATURE" in ds
+            assert "interpolated_model" not in ds

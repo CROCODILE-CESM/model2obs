@@ -15,10 +15,16 @@ Two output structures are supported, selected automatically:
 
 - **Grid mode** – used otherwise.  The output has four dimensions
   (time × depth × latitude × longitude), matching the previous behaviour.
+
+In both modes, a separate data variable is generated for each unique
+observation type found in the ``type`` column of the input DataFrame
+(e.g. ``interpolated_TEMPERATURE``, ``qc_flag_TEMPERATURE``).  All
+per-type variables share the same coordinate grid, which is derived from
+the union of all observation types.
 """
 
 import warnings
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -76,6 +82,13 @@ def write_interpolated_to_netcdf(
     - **Grid mode** – otherwise.  Dimensions are time × depth × latitude ×
       longitude (4-D), matching the original behaviour.
 
+    In both modes a separate pair of variables is written for each unique
+    observation type found in the ``type`` column, e.g.
+    ``interpolated_TEMPERATURE`` / ``qc_flag_TEMPERATURE`` and
+    ``interpolated_U_CURRENT_COMPONENT`` / ``qc_flag_U_CURRENT_COMPONENT``.
+    All per-type variables share the same coordinate grid (derived from the
+    union of all observation types).
+
     Time is stored as datetime objects; xarray handles CF-compliant encoding
     automatically.
 
@@ -90,6 +103,7 @@ def write_interpolated_to_netcdf(
         - ``vertical``: float, depth/vertical coordinate (renamed to ``depth``)
         - ``time``: datetime-like, calendar time of the observation
         - ``interpolated_model_QC``: int, DART QC flag
+        - ``type``: str, DART observation kind (e.g. ``"TEMPERATURE"``)
 
     output_path : str
         Path to the output NetCDF file.
@@ -129,7 +143,7 @@ def write_interpolated_to_netcdf(
 
     required_cols = [
         'interpolated_model', 'longitude', 'latitude',
-        'vertical', 'time', 'interpolated_model_QC',
+        'vertical', 'time', 'interpolated_model_QC', 'type',
     ]
     missing_cols = [col for col in required_cols if col not in ddf.columns]
     if missing_cols:
@@ -155,16 +169,18 @@ def write_interpolated_to_netcdf(
     df['latitude_rounded'] = np.round(df['latitude'] / tol_lat) * tol_lat
     df['depth_rounded'] = np.round(df['depth'] / tol_depth) * tol_depth
 
+    obs_types: List[str] = sorted(df['type'].unique())
+
     use_transect = _has_unique_latlon_pairs(
         df['latitude_rounded'].values,
         df['longitude_rounded'].values,
     )
 
     if use_transect:
-        ds = _build_transect_dataset(df)
+        ds = _build_transect_dataset(df, obs_types)
         coord_structure = 'transect'
     else:
-        ds = _build_grid_dataset(df)
+        ds = _build_grid_dataset(df, obs_types)
         coord_structure = 'grid'
 
     ds['time'].attrs = {
@@ -195,15 +211,21 @@ def write_interpolated_to_netcdf(
         lon_attrs['axis'] = 'X'
     ds['longitude'].attrs = lon_attrs
 
-    ds['interpolated_model'].attrs = {
-        'long_name': 'Interpolated model value at observation location',
-        'coordinates': 'time depth latitude longitude',
-    }
-    ds['qc_flag'].attrs = {
-        'units': '',
-        'long_name': 'DART quality control flag',
-        'coordinates': 'time depth latitude longitude',
-    }
+    for var in ds.data_vars:
+        if var.startswith('interpolated_'):
+            ds[var].attrs = {
+                'long_name': (
+                    f'Interpolated model value at observation location '
+                    f'({var[len("interpolated_"):]})'
+                ),
+                'coordinates': 'time depth latitude longitude',
+            }
+        elif var.startswith('qc_flag_'):
+            ds[var].attrs = {
+                'units': '',
+                'long_name': f'DART quality control flag ({var[len("qc_flag_"):]})',
+                'coordinates': 'time depth latitude longitude',
+            }
 
     if use_transect:
         comment = (
@@ -229,17 +251,20 @@ def write_interpolated_to_netcdf(
         'comment': comment,
     }
 
-    encoding = {
-        'interpolated_model': {
-            'zlib': True, 'complevel': 4, '_FillValue': np.nan, 'dtype': 'float32',
-        },
-        'qc_flag': {
-            'zlib': True, 'complevel': 4, '_FillValue': -999, 'dtype': 'int32',
-        },
+    encoding: Dict[str, dict] = {
         'depth': {'zlib': True, 'complevel': 4, 'dtype': 'float32'},
         'latitude': {'zlib': True, 'complevel': 4, 'dtype': 'float32'},
         'longitude': {'zlib': True, 'complevel': 4, 'dtype': 'float32'},
     }
+    for var in ds.data_vars:
+        if var.startswith('interpolated_'):
+            encoding[var] = {
+                'zlib': True, 'complevel': 4, '_FillValue': np.nan, 'dtype': 'float32',
+            }
+        elif var.startswith('qc_flag_'):
+            encoding[var] = {
+                'zlib': True, 'complevel': 4, '_FillValue': -999, 'dtype': 'int32',
+            }
 
     try:
         ds.to_netcdf(output_path, format='NETCDF4', encoding=encoding)
@@ -247,44 +272,74 @@ def write_interpolated_to_netcdf(
         raise IOError(f"Failed to write NetCDF file {output_path}: {exc}") from exc
 
 
-def _build_transect_dataset(df: pd.DataFrame) -> xr.Dataset:
-    """Build a 3-D transect-mode xarray Dataset.
+def _build_transect_dataset(df: pd.DataFrame, types: List[str]) -> xr.Dataset:
+    """Build a 3-D transect-mode xarray Dataset with per-type variables.
 
     Dimensions are ``(time, depth, latitude)``.  Longitude is added as a
     non-dimension coordinate ``longitude(latitude)`` using the bijective
     lat → lon mapping present in *df*.
 
+    One ``interpolated_{TYPE}`` and one ``qc_flag_{TYPE}`` variable is
+    generated for each entry in *types*.  All variables share the same
+    coordinate grid, which is derived from the union of all observation
+    types in *df*.
+
     Parameters
     ----------
     df:
         DataFrame with columns ``time``, ``depth_rounded``,
-        ``latitude_rounded``, ``longitude_rounded``,
+        ``latitude_rounded``, ``longitude_rounded``, ``type``,
         ``interpolated_model``, and ``interpolated_model_QC``.
         The rounded columns must already satisfy the bijection property.
+    types:
+        Sorted list of unique observation type strings (values of the
+        ``type`` column).
 
     Returns
     -------
     xr.Dataset
     """
-    grouped = df.groupby(['time', 'depth_rounded', 'latitude_rounded'])
-    interpolated = grouped['interpolated_model'].mean()
-    qc_flag = grouped['interpolated_model_QC'].max()
+    # Build shared coordinate template (union of all observations)
+    all_grouped = df.groupby(['time', 'depth_rounded', 'latitude_rounded'])
+    template = (
+        all_grouped['interpolated_model']
+        .mean()
+        .to_xarray()
+        .rename({'depth_rounded': 'depth', 'latitude_rounded': 'latitude'})
+    )
 
-    ds_interp = interpolated.to_xarray()
-    ds_qc = qc_flag.to_xarray().astype('int32')
-
-    ds_interp = ds_interp.rename({'depth_rounded': 'depth', 'latitude_rounded': 'latitude'})
-    ds_qc = ds_qc.rename({'depth_rounded': 'depth', 'latitude_rounded': 'latitude'})
-
-    ds = xr.Dataset({'interpolated_model': ds_interp, 'qc_flag': ds_qc})
-
-    # Build the lat → lon mapping (bijective by construction)
+    # Build the lat → lon mapping (bijective by construction for all types)
     lat_lon = (
         df[['latitude_rounded', 'longitude_rounded']]
         .drop_duplicates()
         .set_index('latitude_rounded')['longitude_rounded']
         .sort_index()
     )
+
+    data_vars = {}
+    for type_name in types:
+        sub = df[df['type'] == type_name]
+        grouped = sub.groupby(['time', 'depth_rounded', 'latitude_rounded'])
+        da_interp = (
+            grouped['interpolated_model']
+            .mean()
+            .to_xarray()
+            .rename({'depth_rounded': 'depth', 'latitude_rounded': 'latitude'})
+            .reindex_like(template, fill_value=np.nan)
+        )
+        da_qc = (
+            grouped['interpolated_model_QC']
+            .max()
+            .to_xarray()
+            .rename({'depth_rounded': 'depth', 'latitude_rounded': 'latitude'})
+            .reindex_like(template, fill_value=-999)
+            .astype('int32')
+        )
+        data_vars[f'interpolated_{type_name}'] = da_interp
+        data_vars[f'qc_flag_{type_name}'] = da_qc
+
+    ds = xr.Dataset(data_vars)
+
     lat_vals = ds['latitude'].values
     lon_vals = lat_lon.reindex(lat_vals).values
     ds = ds.assign_coords(
@@ -294,38 +349,64 @@ def _build_transect_dataset(df: pd.DataFrame) -> xr.Dataset:
     return ds
 
 
-def _build_grid_dataset(df: pd.DataFrame) -> xr.Dataset:
-    """Build a 4-D grid-mode xarray Dataset.
+def _build_grid_dataset(df: pd.DataFrame, types: List[str]) -> xr.Dataset:
+    """Build a 4-D grid-mode xarray Dataset with per-type variables.
 
     Dimensions are ``(time, depth, latitude, longitude)``.  Unobserved
     grid points are filled with NaN / -999.
+
+    One ``interpolated_{TYPE}`` and one ``qc_flag_{TYPE}`` variable is
+    generated for each entry in *types*.  All variables share the same
+    coordinate grid, which is derived from the union of all observation
+    types in *df*.
 
     Parameters
     ----------
     df:
         DataFrame with columns ``time``, ``depth_rounded``,
-        ``latitude_rounded``, ``longitude_rounded``,
+        ``latitude_rounded``, ``longitude_rounded``, ``type``,
         ``interpolated_model``, and ``interpolated_model_QC``.
+    types:
+        Sorted list of unique observation type strings (values of the
+        ``type`` column).
 
     Returns
     -------
     xr.Dataset
     """
-    df_indexed = df.set_index(
-        ['time', 'depth_rounded', 'latitude_rounded', 'longitude_rounded']
-    )
-    interpolated = df_indexed.groupby(level=[0, 1, 2, 3])['interpolated_model'].mean()
-    qc_flag = df_indexed.groupby(level=[0, 1, 2, 3])['interpolated_model_QC'].max()
-
-    ds_interp = interpolated.to_xarray().unstack(fill_value=np.nan)
-    ds_qc = qc_flag.to_xarray().unstack(fill_value=-999).astype('int32')
-
-    rename_map = {
+    _index_cols = ['time', 'depth_rounded', 'latitude_rounded', 'longitude_rounded']
+    _rename_map = {
         'depth_rounded': 'depth',
         'latitude_rounded': 'latitude',
         'longitude_rounded': 'longitude',
     }
-    ds_interp = ds_interp.rename(rename_map)
-    ds_qc = ds_qc.rename(rename_map)
 
-    return xr.Dataset({'interpolated_model': ds_interp, 'qc_flag': ds_qc})
+    # Build shared coordinate template (union of all observations)
+    all_indexed = df.set_index(_index_cols)
+    all_interp = all_indexed.groupby(level=[0, 1, 2, 3])['interpolated_model'].mean()
+    template = all_interp.to_xarray().unstack(fill_value=np.nan).rename(_rename_map)
+
+    data_vars = {}
+    for type_name in types:
+        sub = df[df['type'] == type_name].set_index(_index_cols)
+        da_interp = (
+            sub.groupby(level=[0, 1, 2, 3])['interpolated_model']
+            .mean()
+            .to_xarray()
+            .unstack(fill_value=np.nan)
+            .rename(_rename_map)
+            .reindex_like(template, fill_value=np.nan)
+        )
+        da_qc = (
+            sub.groupby(level=[0, 1, 2, 3])['interpolated_model_QC']
+            .max()
+            .to_xarray()
+            .unstack(fill_value=-999)
+            .rename(_rename_map)
+            .reindex_like(template, fill_value=-999)
+            .astype('int32')
+        )
+        data_vars[f'interpolated_{type_name}'] = da_interp
+        data_vars[f'qc_flag_{type_name}'] = da_qc
+
+    return xr.Dataset(data_vars)
