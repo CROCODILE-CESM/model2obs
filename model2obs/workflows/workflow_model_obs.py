@@ -15,7 +15,6 @@ import numpy as np
 import pandas as pd
 import pydartdiags.obs_sequence.obs_sequence as obsq
 import warnings
-import xarray as xr
 
 from . import workflow
 from ..io import file_utils
@@ -56,7 +55,9 @@ class WorkflowModelObs(workflow.Workflow):
         Args:
             config: Configuration dictionary containing workflow parameters
         """
-
+        # Set NetCDF defaults before super().__init__ so that _validate_config
+        # (called inside super().__init__) can validate them.
+        config_utils.setup_netcdf_config_defaults(config)
         super().__init__(config)
         self._namelist = None
         self.input_nml_template = files('model2obs.utils').joinpath('input_template.nml')
@@ -64,6 +65,14 @@ class WorkflowModelObs(workflow.Workflow):
         self.perfect_model_obs_log_file = "perfect_model_obs.log"
         if os.path.isfile(self.perfect_model_obs_log_file):
             os.remove(self.perfect_model_obs_log_file)
+
+    def _validate_config(self) -> None:
+        """Validate configuration parameters.
+
+        Extends parent validation to check NetCDF-specific parameters.
+        """
+        super()._validate_config()
+        config_utils.validate_netcdf_config(self.config)
 
     def run(self, trim_obs: bool = True, no_matching: bool = False,
             force_obs_time: bool = False, parquet_only: bool = False,
@@ -101,6 +110,7 @@ class WorkflowModelObs(workflow.Workflow):
                 self.config['input_nml_bck'],
                 self.config['trimmed_obs_folder'],
                 self.config['output_folder'],
+                self.config['netcdf_output_folder'],
             ]
             for folder in output_folders:
                 print("  Clearing folder:", folder)
@@ -273,8 +283,8 @@ class WorkflowModelObs(workflow.Workflow):
         tmp_parquet_folder = os.path.join(parquet_folder, "tmp")
         os.makedirs(tmp_parquet_folder, exist_ok=True)
 
-        for perf_obs_f, orig_obs_f in zip(perf_obs_files, orig_obs_files):
-            self._merge_pair_to_parquet(perf_obs_f, orig_obs_f, tmp_parquet_folder)
+        for i, (perf_obs_f, orig_obs_f) in enumerate(zip(perf_obs_files, orig_obs_files)):
+            self._merge_pair_to_parquet(perf_obs_f, orig_obs_f, tmp_parquet_folder, pair_index=i)
 
         ddf = dd.read_parquet(tmp_parquet_folder)
         ddf = ddf.repartition(partition_size="300MB")
@@ -937,9 +947,24 @@ class WorkflowModelObs(workflow.Workflow):
         except Exception as exc:  # pylint: disable=broad-except
             print(f"          WARNING: could not write pair summary log: {exc}")
 
-    def _merge_pair_to_parquet(self, perf_obs_file: str, orig_obs_file: str, 
-                              parquet_path: str) -> None:
-        """Merge a pair of observation files into parquet format."""
+    def _merge_pair_to_parquet(self, perf_obs_file: str, orig_obs_file: str,
+                              parquet_path: str, pair_index: int = 0) -> None:
+        """Merge a pair of observation files into parquet format.
+
+        When ``config['interpolate_only']`` is ``True``, also writes a per-pair
+        CF-compliant NetCDF file to ``config['netcdf_output_folder']``.
+
+        Parameters
+        ----------
+        perf_obs_file:
+            Path to the ``perfect_model_obs`` output file (``obs_seq*.out``).
+        orig_obs_file:
+            Path to the original (or trimmed) observation input file.
+        parquet_path:
+            Directory where the intermediate Parquet file is written.
+        pair_index:
+            Zero-based index of this model-obs pair, used for file naming.
+        """
         # Read obs_sequence files
         perf_obs_out = obsq.ObsSequence(perf_obs_file)
         perf_obs_out.update_attributes_from_df()
@@ -949,12 +974,26 @@ class WorkflowModelObs(workflow.Workflow):
         obs_col = [col for col in trimmed.df.columns.to_list() if col.endswith("_observation") or col=="observation"]
         if len(obs_col) > 1:
             raise ValueError("More than one observation columns found.")
+        elif len(obs_col) == 0:
+            if not self.config.get('interpolate_only', False):
+                raise ValueError(
+                    "No observation column found in the original obs_seq file. "
+                    "Expected a column named 'observation' or ending in '_observation'."
+                )
+            # In interpolate_only mode the obs_seq.in file contains only
+            # observation locations/metadata with no actual observed values.
+            trimmed.df['obs'] = np.nan
         else:
-            trimmed.df = trimmed.df.rename(columns={obs_col[0]:"obs"})
+            trimmed.df = trimmed.df.rename(columns={obs_col[0]: "obs"})
 
-        qc_col = [col for col in perf_obs_out.df.columns.to_list() if col.endswith("_QC")]
+        # Use qc_copie_names (set by ObsSequence) as the authoritative source;
+        # fall back to the _QC suffix for files where that attribute is absent.
+        qc_col = [col for col in perf_obs_out.df.columns.to_list()
+                  if col in perf_obs_out.qc_copie_names or col.endswith("_QC")]
         if len(qc_col) > 1:
             raise ValueError("More than one QC column found.")
+        elif len(qc_col) == 0:
+            raise ValueError("No QC column found in perfect_model_obs output.")
         perf_model_col = 'interpolated_model'
         perf_model_col_QC = perf_model_col + "_QC"
         perf_obs_out.df = perf_obs_out.df.rename(
@@ -1039,6 +1078,49 @@ class WorkflowModelObs(workflow.Workflow):
             ignore_divisions=True,
             write_index=False
         )
+
+        if self.config.get('interpolate_only', False):
+            self._write_pair_netcdf(merged, pair_index)
+
+    def _write_pair_netcdf(
+        self,
+        merged: pd.DataFrame,
+        pair_index: int,
+    ) -> None:
+        """Write a single model-obs pair to a CF-compliant NetCDF file.
+
+        Called from :meth:`_merge_pair_to_parquet` when
+        ``config['interpolate_only']`` is ``True``.  Errors are caught and
+        logged so that a NetCDF failure never aborts the rest of the workflow.
+
+        Parameters
+        ----------
+        merged:
+            Merged Pandas DataFrame (as produced at the end of
+            ``_merge_pair_to_parquet``).  Column validation is delegated to
+            ``write_interpolated_to_netcdf``.
+        pair_index:
+            Zero-based index of this pair, used in the output filename.
+        """
+        from ..io import netcdf_output  # pylint: disable=import-outside-toplevel
+
+        netcdf_file = os.path.join(
+            self.config['netcdf_output_folder'],
+            f"model-obs-{pair_index:04d}.nc",
+        )
+
+        try:
+            tolerances = self.config['netcdf_coord_tolerance']
+            print(f"  Writing NetCDF: {netcdf_file}")
+            netcdf_output.write_interpolated_to_netcdf(
+                ddf=dd.from_pandas(merged),
+                output_path=netcdf_file,
+                tolerances=tolerances,
+            )
+
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"  Error writing NetCDF for pair {pair_index}: {exc}")
+
 
     def _set_model_obs_df(self, path: Optional[str] = None) -> None:
         """Create model_obs_df dask dataframe linked to parquet with model-obs data"""

@@ -2,6 +2,8 @@
 
 **model2obs** is a Python toolset for comparing ocean model outputs and observation datasets. It streamlines workflows for interpolating model data into the observation space, producing tabular data in Parquet format ready for analysis and interactive visualization.
 
+**New in April 2026:** model2obs now supports optional **NetCDF output** for interpolated model values (see [NetCDF Output](#netcdf-output)), and `preview_namelist()` to inspect the generated `input.nml` before running.
+
 **New in March 2026:** model2obs (v0.5.1) now supports **parallel processing** of model output files! See the parallel version of Tutorial 1 for how to use it. It also supports the latest DART v11.21.2, including update scripts to install model2obs on NCAR's Casper HPC. A bug where the wrong calendar was used when converting model time to days, seconds, has also been fixed.   
 
 **New in December 2025:** model2obs (v0.3.0) now supports **ROMS (Regional Ocean Modeling System)** in addition to MOM6, with a flexible model adapter architecture that enables easy extension to other ocean models. The new architecture abstracts model-specific operations (file I/O, unit conversions, configuration requirements) into dedicated adapters, making the codebase more maintainable and extensible.
@@ -18,6 +20,7 @@
     - [Key Classes and Functions](#key-classes-and-functions)
 - [Usage](#usage)
     - [Programmatic Usage (Class-based API, e.g for Jupyter notebooks)](#programmatic-usage-class-based-api-eg-for-jupyter-notebooks)
+    - [Previewing the input.nml before running](#previewing-the-inputnml-before-running)
     - [Command Line Interface](#command-line-interface)
 - [How to Cite](#how-to-cite)
       
@@ -31,6 +34,7 @@ Current:
 - **Ocean models supported: MOM6, ROMS** (via model adapter architecture)
 - Ocean observation format supported: DART obs_seq.in format
 - Model adapter system for easy extension to new ocean models
+- `preview_namelist()` to inspect the generated `input.nml` before running
 
 Future:
 - Refined temporal and spatial resampling tools:
@@ -199,6 +203,71 @@ else:
     skip and check next observation sequence file (if any)
 ```
 
+### NetCDF Output
+
+#### Enabling NetCDF Output
+
+Set the `interpolate_only` flag to `true` in your configuration file to enable NetCDF generation:
+
+```yaml
+interpolate_only: true
+netcdf_output_folder: "netcdf_output"  # optional, defaults to "netcdf_output"
+```
+
+When enabled, one NetCDF file is created per model-observation pair (parallel to the Parquet workflow): `model-obs-0000.nc`, `model-obs-0001.nc`, etc.
+
+#### NetCDF File Structure
+
+Each NetCDF file uses a 4D gridded structure following CF conventions:
+
+**Dimensions:**
+- `time`: Observation times (seconds since 1601-01-01 00:00:00)
+- `depth`: Observation depths in meters below sea surface (positive down)
+- `latitude`: Observation latitudes (degrees North)
+- `longitude`: Observation longitudes (degrees East)
+
+**Data Variables:**
+- `interpolated_model_<OBS_KIND>(time, depth, latitude, longitude)`: Interpolated model value of OBS_KIND at each observation location
+- `qc_flag_<OBS_KIND>(time, depth, latitude, longitude)`: DART quality control flag for each interpolation of OBS_KIND
+
+**Sparse Grid:** Not all grid points contain observations. Missing points are filled with `NaN` (for `interpolated_model`) or `-999` (for `qc_flag`).
+
+**CF Compliance:** Proper `units`, `standard_name`, and coordinate attributes follow CF-1.8 conventions.
+
+#### Coordinate Tolerance (Optional)
+
+To reduce file size and dimension cardinality, nearby observation locations can be merged using coordinate tolerances:
+
+```yaml
+netcdf_coord_tolerance:
+  longitude: 0.01  # degrees (default: 1e-2)
+  latitude: 0.01   # degrees (default: 1e-2)
+  depth: 0.1       # meters (default: 1e-1)
+```
+
+For example, with `latitude: 0.01`, observations at lat=30.003° and lat=30.005° are both assigned to lat=30.00°, reducing the number of unique latitude values in the NetCDF grid.
+
+#### Complete Configuration Example
+
+```yaml
+# Required: Enable NetCDF output
+interpolate_only: true
+
+# Optional: Output folder (defaults to "netcdf_output")
+netcdf_output_folder: "my_netcdf_results"
+
+# Optional: Coordinate tolerances (defaults shown)
+netcdf_coord_tolerance:
+  longitude: 1.0e-2  # 0.01 degrees (~1 km at equator)
+  latitude: 1.0e-2   # 0.01 degrees (~1 km)
+  depth: 1.0e-1      # 0.1 meters
+```
+
+#### Notes
+
+- NetCDF output is **supplementary** to the Parquet format. The Parquet files remain the primary output for downstream analysis.
+- Set `interpolate_only: false` (or omit the parameter) to disable NetCDF generation.
+
 ## Architecture
 
 The toolkit is organized into logical modules:
@@ -219,6 +288,7 @@ The toolkit is organized into logical modules:
 - `run()` - Execute complete workflow 
 - `process_files()` - Process model and observation files
 - `merge_model_obs_to_parquet()` - Convert results to parquet format
+- `preview_namelist(filename=None)` - Inspect the generated `input.nml` (print to screen, or save to file)
 - `get_config(key)` - Get configuration value
 - `set_config(key, value)` - Set configuration value
 - `print_config()` - Print current configuration
@@ -329,6 +399,26 @@ required_keys = workflow.get_required_config_keys()
 
 workflow.run()
 ```
+
+### Previewing the input.nml before running
+
+`preview_namelist()` lets you inspect the `input.nml` that would be passed to `perfect_model_obs`
+without executing the full workflow. This is useful for debugging configurations and verifying
+that model-specific keys are populated correctly.
+
+```python
+from model2obs.workflows import WorkflowModelObs
+
+workflow = WorkflowModelObs.from_config_file("config.yaml")
+
+# Print the namelist to screen
+workflow.preview_namelist()
+
+# Or save it to a file for further inspection
+workflow.preview_namelist("my_input.nml")
+```
+
+The method lazily initialises the namelist on first call, so it is safe to call before `run()`.
 
 ### Command Line Interface
 

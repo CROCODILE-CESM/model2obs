@@ -215,6 +215,63 @@ def parse_obs_def_ocean_mod(rst_file_path: str) -> Tuple[Dict[str, str], Dict[st
 
     return obs_type_to_qty, qty_to_obs_types
 
+def setup_netcdf_config_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply default values for NetCDF output configuration keys.
+
+    Sets defaults for ``interpolate_only``, ``netcdf_output_folder``, and
+    ``netcdf_coord_tolerance`` (and its sub-keys) when they are absent from
+    *config*.  Modifies *config* in-place and returns it.
+
+    Args:
+        config: Configuration dictionary to update with defaults.
+
+    Returns:
+        The same configuration dictionary (modified in-place).
+    """
+    config.setdefault('interpolate_only', False)
+    config.setdefault('netcdf_output_folder', 'netcdf_output')
+    tol = config.setdefault('netcdf_coord_tolerance', {})
+    tol.setdefault('longitude', 1e-2)
+    tol.setdefault('latitude', 1e-2)
+    tol.setdefault('depth', 1e-1)
+    return config
+
+
+def validate_netcdf_config(config: Dict[str, Any]) -> None:
+    """Validate NetCDF-specific configuration keys.
+
+    Expects that ``setup_netcdf_config_defaults`` has already been called so
+    that all required keys are present.  Creates the ``netcdf_output_folder``
+    directory when it does not yet exist.
+
+    Args:
+        config: Configuration dictionary to validate.
+
+    Raises:
+        ValueError: If any NetCDF configuration key has an invalid type or
+            value.
+    """
+    if not isinstance(config['interpolate_only'], bool):
+        raise ValueError(
+            f"interpolate_only must be boolean, got {type(config['interpolate_only'])}"
+        )
+
+    if not isinstance(config['netcdf_output_folder'], str):
+        raise ValueError("netcdf_output_folder must be a string")
+    os.makedirs(config['netcdf_output_folder'], exist_ok=True)
+
+    if not isinstance(config['netcdf_coord_tolerance'], dict):
+        raise ValueError("netcdf_coord_tolerance must be a dictionary")
+    for key in ('longitude', 'latitude', 'depth'):
+        if key in config['netcdf_coord_tolerance']:
+            val = config['netcdf_coord_tolerance'][key]
+            if not isinstance(val, (int, float)) or val <= 0:
+                raise ValueError(
+                    f"netcdf_coord_tolerance['{key}'] must be a positive number, "
+                    f"got {val}"
+                )
+
+
 def validate_and_expand_obs_types(
         obs_types_list: List[str],
         obs_types_dicts: Tuple[Dict[str, str], Dict[str, List[str]]]

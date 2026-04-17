@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added
+- NetCDF output support for interpolated model-observation comparison data
+  - Optional CF-compliant NetCDF4 export via `interpolate_only: true` config flag
+  - One NetCDF file per model-obs pair with 4D gridded structure (time, depth, latitude, longitude)
+  - Coordinate tolerance feature to merge nearby locations and reduce dimension sizes
+  - Model-independent feature (works with MOM6 and ROMS)
+
 ## [0.5.1] - 2026-03-25
 - Add support to DART v11.21.2: MOM6 model_state_variables in input.nml now contains 5 values
 - Update paths in install files for NCAR install to link to new pre-installed DART v11.21.2 on Casper
