@@ -205,8 +205,6 @@ else:
 
 ### NetCDF Output
 
-**New in April 2026:** model2obs now supports optional NetCDF output for interpolated model values! In addition to the standard Parquet format, you can export results to CF-compliant NetCDF4 files suitable for archival, visualization, and integration with standard oceanographic tools.
-
 #### Enabling NetCDF Output
 
 Set the `interpolate_only` flag to `true` in your configuration file to enable NetCDF generation:
@@ -229,8 +227,8 @@ Each NetCDF file uses a 4D gridded structure following CF conventions:
 - `longitude`: Observation longitudes (degrees East)
 
 **Data Variables:**
-- `interpolated_model(time, depth, latitude, longitude)`: Interpolated model value at each observation location
-- `qc_flag(time, depth, latitude, longitude)`: DART quality control flag for each interpolation
+- `interpolated_model_<OBS_KIND>(time, depth, latitude, longitude)`: Interpolated model value of OBS_KIND at each observation location
+- `qc_flag_<OBS_KIND>(time, depth, latitude, longitude)`: DART quality control flag for each interpolation of OBS_KIND
 
 **Sparse Grid:** Not all grid points contain observations. Missing points are filled with `NaN` (for `interpolated_model`) or `-999` (for `qc_flag`).
 
@@ -265,20 +263,10 @@ netcdf_coord_tolerance:
   depth: 1.0e-1      # 0.1 meters
 ```
 
-#### Technical Details
-
-- **Time Precision:** Time coordinates use second precision (`seconds since 1601-01-01 00:00:00`) for accurate temporal representation.
-- **Depth Convention:** The vertical coordinate is always named `depth` (not `vertical`) with units in meters and `positive="down"` attribute.
-- **Memory Efficiency:** Uses Dask DataFrames for processing large datasets without loading everything into memory.
-- **Time Validation:** Warns if interpolated times differ from model file times.
-- **Compression:** All variables use zlib compression (level 4) to reduce file sizes.
-- **Error Handling:** NetCDF generation errors are logged but don't break the primary Parquet workflow.
-
 #### Notes
 
 - NetCDF output is **supplementary** to the Parquet format. The Parquet files remain the primary output for downstream analysis.
 - Set `interpolate_only: false` (or omit the parameter) to disable NetCDF generation.
-- The `interpolate_only` parameter is **model-independent** — it works with MOM6 and ROMS.
 
 ## Architecture
 

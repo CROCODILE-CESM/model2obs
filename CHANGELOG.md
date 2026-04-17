@@ -8,8 +8,6 @@ All notable changes to this project will be documented in this file.
   - Optional CF-compliant NetCDF4 export via `interpolate_only: true` config flag
   - One NetCDF file per model-obs pair with 4D gridded structure (time, depth, latitude, longitude)
   - Coordinate tolerance feature to merge nearby locations and reduce dimension sizes
-  - Sparse grid with NaN fill values for missing observations
-  - Time validation warnings if model and interpolated times differ
   - Model-independent feature (works with MOM6 and ROMS)
 
 ## [0.5.1] - 2026-03-25
