@@ -41,4 +41,6 @@ $CONDA_ENV_PATH/bin/python -m ipykernel install --user --name="$CONDA_ENV_NAME" 
 
 if [[ "$TUTORIAL" -eq 1 ]]; then
     conda run -n "$CONDA_ENV_NAME" --no-capture-output ./tutorials_download.sh
+    RELATIVE_TUTORIAL_PATH=$(realpath --relative-to="../" "$TUTORIAL_DATA_PATH")
+    sed -i "1s|^|${RELATIVE_TUTORIAL_PATH}\n|" ../.gitignore
 fi
