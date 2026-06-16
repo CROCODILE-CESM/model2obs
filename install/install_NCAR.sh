@@ -41,4 +41,6 @@ chmod +x $CONDA_ENV_PATH/etc/conda/activate.d/load_paths.sh
 
 if [[ "$TUTORIAL" -eq 1 ]]; then
     conda run -n "$CONDA_ENV_NAME" --no-capture-output ./tutorials_download.sh
+    RELATIVE_TUTORIAL_PATH=$(realpath --relative-to="../" "$TUTORIAL_DATA_PATH")
+    sed -i "1s|^|${RELATIVE_TUTORIAL_PATH}\n|" ../.gitignore
 fi
