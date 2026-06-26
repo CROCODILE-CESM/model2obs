@@ -203,6 +203,20 @@ else:
     skip and check next observation sequence file (if any)
 ```
 
+### Logging
+
+model2obs uses two output surfaces during workflow runs:
+- **Screen (stdout):** concise progress and high-level status.
+- **Run log file:** detailed diagnostics for debugging (including matching/discard decisions in time-matching paths).
+
+By default, the run log is written to `<output_folder>/model2obs.log`.
+You can override the run log location in YAML:
+
+```yaml
+logging:
+  run_log_file: /full/path/to/model2obs.log
+```
+
 ### NetCDF Output
 
 #### Enabling NetCDF Output
