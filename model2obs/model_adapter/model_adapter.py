@@ -20,7 +20,7 @@ from ..io import file_utils
 
 from dataclasses import dataclass
 
-_logger = get_module_logger(__name__)
+_logger = logging_utils.get_module_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -74,21 +74,21 @@ class ModelAdapter(ABC):
     def validate_paths(self, config, run_opts) -> None:
         """Validate paths provided in config file."""
 
-        _log_progress("  Validating model_files_folder...")
+        _logger.info("  Validating model_files_folder...")
         config_utils.check_directory_not_empty(config['model_files_folder'], "model_files_folder")
         config_utils.check_nc_files_only(config['model_files_folder'], "model_files_folder")
 
-        _log_progress("  Validating obs_seq_in_folder...")
+        _logger.info("  Validating obs_seq_in_folder...")
         config_utils.check_directory_not_empty(config['obs_seq_in_folder'], "obs_seq_in_folder")
 
-        _log_progress("  Validating output_folder...")
+        _logger.info("  Validating output_folder...")
         config_utils.check_or_create_folder(config['output_folder'], "output_folder")
 
-        _log_progress("  Validating tmp_folder...")
+        _logger.info("  Validating tmp_folder...")
         config_utils.check_or_create_folder(config['tmp_folder'], "tmp_folder")
 
         if run_opts.trim_obs:
-            _log_progress("  Validating trimmed_obs_folder...")
+            _logger.info("  Validating trimmed_obs_folder...")
             trimmed_obs_folder = config.get('trimmed_obs_folder', 'trimmed_obs_seq')
             config['trimmed_obs_folder'] = trimmed_obs_folder
             config_utils.check_or_create_folder(trimmed_obs_folder, "trimmed_obs_folder")
@@ -97,10 +97,10 @@ class ModelAdapter(ABC):
         input_nml_bck = config.get('input_nml_bck', 'input.nml.backup')
         config['input_nml_bck'] = input_nml_bck
         
-        _log_progress("  Validating input_nml_bck...")
+        _logger.info("  Validating input_nml_bck...")
         config_utils.check_or_create_folder(input_nml_bck, "input_nml_bck")
 
-        _log_progress("  Validating parquet_folder...")
+        _logger.info("  Validating parquet_folder...")
         config_utils.check_or_create_folder(config["parquet_folder"], "parquet_folder")
 
         return

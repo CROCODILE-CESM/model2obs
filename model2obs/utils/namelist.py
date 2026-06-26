@@ -8,7 +8,7 @@ import tempfile
 from typing import Any, Dict, List, Optional, Union
 
 from . import logging_utils
-_logger = get_module_logger(__name__)
+_logger = logging_utils.get_module_logger(__name__)
 
 
 class Namelist():

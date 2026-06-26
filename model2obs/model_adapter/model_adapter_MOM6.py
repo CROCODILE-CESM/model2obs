@@ -14,7 +14,7 @@ from . import ModelAdapter, ModelAdapterCapabilities
 from ..utils import config as config_utils
 from ..utils import logging_utils
 
-_logger = get_module_logger(__name__)
+_logger = logging_utils.get_module_logger(__name__)
 
 class ModelAdapterMOM6(ModelAdapter):
     """Base class for all model normalizations

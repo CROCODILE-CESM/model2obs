@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Tuple
 import yaml
 
 from . import logging_utils
-_logger = get_module_logger(__name__)
+_logger = logging_utils.get_module_logger(__name__)
 
 
 def resolve_path(path: str, relative_to: str = None) -> str:
