@@ -14,22 +14,7 @@ from . import ModelAdapter, ModelAdapterCapabilities
 from ..utils import config as config_utils
 from ..utils import logging_utils
 
-LOGGER = logging.getLogger(__name__)
-
-
-def _log_progress(message: str) -> None:
-    """Emit high-level progress to screen and log."""
-    logging_utils.emit_progress(message, LOGGER)
-
-
-def _log_debug(message: str) -> None:
-    """Emit detailed diagnostics to log only."""
-    logging_utils.emit_debug(message, LOGGER)
-
-
-def _log_warning(message: str) -> None:
-    """Emit warnings to screen and log."""
-    logging_utils.emit_warning(message, LOGGER)
+_logger = get_module_logger(__name__)
 
 class ModelAdapterMOM6(ModelAdapter):
     """Base class for all model normalizations
@@ -94,7 +79,7 @@ class ModelAdapterMOM6(ModelAdapter):
         super().validate_paths(config, run_opts)
 
         # MOM6 specific paths
-        _log_progress("  Validating .nc files for model_nml...")
+        _logger.info("  Validating .nc files for model_nml...")
         config_utils.check_nc_file(config['template_file'], "template_file")
         config_utils.check_nc_file(config['static_file'], "static_file")
         config_utils.check_nc_file(config['ocean_geometry'], "ocean_geometry")
@@ -102,7 +87,7 @@ class ModelAdapterMOM6(ModelAdapter):
         # Ensure DART can perform vertical interpolation: either use_pseudo_depth
         # must be True, or the layer thickness variable must be in the state.
         # Only enforced when model_state_variables is explicitly configured.
-        _log_progress("  Validating MOM6 vertical interpolation settings...")
+        _logger.info("  Validating MOM6 vertical interpolation settings...")
         state_vars = config.get('model_state_variables')
         if state_vars is not None:
             use_pseudo_depth = config.get('use_pseudo_depth', False)
@@ -206,7 +191,7 @@ class ModelAdapterMOM6(ModelAdapter):
             lon_min, lat_min = hull_points.min(axis=0)
             lon_max, lat_max = hull_points.max(axis=0)
 
-            _log_progress(
+            _logger.info(
                 f"    Model grid convex hull bounding box (lon, lat): "
                 f"[{lon_min:.2f}, {lon_max:.2f}], [{lat_min:.2f}, {lat_max:.2f}]"
             )

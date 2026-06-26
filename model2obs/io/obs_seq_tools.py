@@ -6,28 +6,12 @@ import pydartdiags.obs_sequence.obs_sequence as obsq
 from shapely.geometry import Polygon
 
 from ..utils import logging_utils
+_logger = get_module_logger(__name__)
 
 try:
     from shapely import contains_xy
 except ImportError:
     from shapely.vectorized import contains as contains_xy
-
-LOGGER = logging.getLogger(__name__)
-
-
-def _log_progress(message: str) -> None:
-    """Emit high-level progress to screen and log."""
-    logging_utils.emit_progress(message, LOGGER)
-
-
-def _log_debug(message: str) -> None:
-    """Emit detailed diagnostics to log only."""
-    logging_utils.emit_debug(message, LOGGER)
-
-
-def _log_warning(message: str) -> None:
-    """Emit warnings to screen and log."""
-    logging_utils.emit_warning(message, LOGGER)
 
 
 def trim_obs_seq_in(obs_in_file: str, hull_polygon: Polygon, hull_points: np.ndarray, trimmed_obs_file: str) -> None:
@@ -44,15 +28,15 @@ def trim_obs_seq_in(obs_in_file: str, hull_polygon: Polygon, hull_points: np.nda
     # Get bounding box for print
     lon_min, lat_min = hull_points.min(axis=0)
     lon_max, lat_max = hull_points.max(axis=0)
-    _log_progress("           Convex hull boundaries:")
-    _log_progress(f"            Longitude: {lon_min:.2f}° to {lon_max:.2f}° (0-360 convention)")
-    _log_progress(f"            Latitude: {lat_min:.2f}° to {lat_max:.2f}°")
+    _logger.info("           Convex hull boundaries:")
+    _logger.info(f"            Longitude: {lon_min:.2f}° to {lon_max:.2f}° (0-360 convention)")
+    _logger.info(f"            Latitude: {lat_min:.2f}° to {lat_max:.2f}°")
 
     obs_seq_in = obsq.ObsSequence(obs_in_file)
     obs_lon = obs_seq_in.df['longitude'].values
     obs_lat = obs_seq_in.df['latitude'].values
 
-    _log_progress(
+    _logger.info(
         f"           Number of observations before filtering to convex hull: {len(obs_seq_in.df)}"
     )
 
@@ -63,11 +47,11 @@ def trim_obs_seq_in(obs_in_file: str, hull_polygon: Polygon, hull_points: np.nda
 
     obs_seq_in_original_df = obs_seq_in.df.copy()
     obs_seq_in.df = obs_seq_in.df[within_hull_mask].reset_index(drop=True)
-    _log_progress(f"           Number of observations after filtering to convex hull: {len(obs_seq_in.df)}")
-    _log_progress(
+    _logger.info(f"           Number of observations after filtering to convex hull: {len(obs_seq_in.df)}")
+    _logger.info(
         f"           Percentage of original observations retained: "
         f"{len(obs_seq_in.df)/len(obs_seq_in_original_df)*100:.1f}%"
     )
 
     obs_seq_in.write_obs_seq(trimmed_obs_file)
-    _log_progress(f"           Trimmed file stored to {trimmed_obs_file}.")
+    _logger.info(f"           Trimmed file stored to {trimmed_obs_file}.")
