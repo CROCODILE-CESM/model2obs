@@ -48,9 +48,9 @@ def setup_package_logger(config: Dict[str, Any], parallel: bool) -> Tuple[loggin
     package_logger.handlers.clear()
 
     if parallel:
-        fmt = "%(asctime)s | %(threadName)s | %(name)s | %(levelname)s | %(message)s"
+        fmt = "%(asctime)s | %(threadName)s | %(message)s"
     else:
-        fmt = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+        fmt = "%(asctime)s | %(message)s"
 
     file_handler = logging.FileHandler(run_log_path, mode="w", encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
