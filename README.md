@@ -209,7 +209,7 @@ model2obs uses two output surfaces during workflow runs:
 - **Screen (stdout):** concise progress and high-level status.
 - **Run log file:** detailed diagnostics for debugging (including matching/discard decisions in time-matching paths).
 
-By default, the run log is written to `<output_folder>/model2obs.log`.
+By default, the run log is written to `<output_folder>/logs/model2obs.log`.
 You can override the run log location in YAML:
 
 ```yaml

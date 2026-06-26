@@ -1,11 +1,14 @@
 """Base Workflow class for model2obs workflow orchestration."""
 
+import logging
 import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type
 
 from ..utils import config as config_utils
 from ..model_adapter.registry import create_model_adapter
+
+LOGGER = logging.getLogger(__name__)
 
 class Workflow(ABC):
     """Base class for all model2obs workflows.
@@ -108,6 +111,8 @@ class Workflow(ABC):
     def print_config(self) -> None:
         """Print current configuration."""
         print("Configuration:")
+        LOGGER.info("Configuration:")
         for key, value in self.config.items():
-            print(f"  {key}: {value}")
-
+            message = f"  {key}: {value}"
+            print(message)
+            LOGGER.info(message)

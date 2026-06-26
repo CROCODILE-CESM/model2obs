@@ -2,12 +2,15 @@
 
 from contextlib import contextmanager
 from collections.abc import Iterator
+import logging
 from typing import Any, Dict, List
 import pandas as pd
 import xarray as xr
 
 from . import ModelAdapter, ModelAdapterCapabilities
 from ..utils import config as config_utils
+
+LOGGER = logging.getLogger(__name__)
 
 class ModelAdapterROMSRutgers(ModelAdapter):
     """Base class for all model normalizations
@@ -69,7 +72,9 @@ class ModelAdapterROMSRutgers(ModelAdapter):
         super().validate_paths(config, run_opts)
 
         # ROMS specific validation
-        print("  Validating roms model file...")
+        message = "  Validating roms model file..."
+        print(message)
+        LOGGER.info(message)
         config_utils.check_nc_file(config['roms_filename'], "roms_filename")
 
         return
@@ -123,4 +128,3 @@ class ModelAdapterROMSRutgers(ModelAdapter):
         df["obs"] = df["obs"].mask(condition, df["obs"] * 1000)
     
         return df
-

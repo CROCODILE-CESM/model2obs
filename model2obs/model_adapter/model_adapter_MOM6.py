@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from collections.abc import Iterator
+import logging
 from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
@@ -11,6 +12,8 @@ import xarray as xr
 
 from . import ModelAdapter, ModelAdapterCapabilities
 from ..utils import config as config_utils
+
+LOGGER = logging.getLogger(__name__)
 
 class ModelAdapterMOM6(ModelAdapter):
     """Base class for all model normalizations
@@ -75,7 +78,9 @@ class ModelAdapterMOM6(ModelAdapter):
         super().validate_paths(config, run_opts)
 
         # MOM6 specific paths
-        print("  Validating .nc files for model_nml...")
+        message = "  Validating .nc files for model_nml..."
+        print(message)
+        LOGGER.info(message)
         config_utils.check_nc_file(config['template_file'], "template_file")
         config_utils.check_nc_file(config['static_file'], "static_file")
         config_utils.check_nc_file(config['ocean_geometry'], "ocean_geometry")
@@ -83,7 +88,9 @@ class ModelAdapterMOM6(ModelAdapter):
         # Ensure DART can perform vertical interpolation: either use_pseudo_depth
         # must be True, or the layer thickness variable must be in the state.
         # Only enforced when model_state_variables is explicitly configured.
-        print("  Validating MOM6 vertical interpolation settings...")
+        message = "  Validating MOM6 vertical interpolation settings..."
+        print(message)
+        LOGGER.info(message)
         state_vars = config.get('model_state_variables')
         if state_vars is not None:
             use_pseudo_depth = config.get('use_pseudo_depth', False)
@@ -187,7 +194,11 @@ class ModelAdapterMOM6(ModelAdapter):
             lon_min, lat_min = hull_points.min(axis=0)
             lon_max, lat_max = hull_points.max(axis=0)
 
-            print(f"    Model grid convex hull bounding box (lon, lat): "
-                  f"[{lon_min:.2f}, {lon_max:.2f}], [{lat_min:.2f}, {lat_max:.2f}]")
+            message = (
+                f"    Model grid convex hull bounding box (lon, lat): "
+                f"[{lon_min:.2f}, {lon_max:.2f}], [{lat_min:.2f}, {lat_max:.2f}]"
+            )
+            print(message)
+            LOGGER.info(message)
 
             return hull_polygon, hull_points

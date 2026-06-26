@@ -1,10 +1,13 @@
 """Configuration utilities for model2obs workflows."""
 
 from datetime import timedelta
+import logging
 import os
 import re
 from typing import Any, Dict, List, Tuple
 import yaml
+
+LOGGER = logging.getLogger(__name__)
 
 
 def resolve_path(path: str, relative_to: str = None) -> str:
@@ -13,7 +16,9 @@ def resolve_path(path: str, relative_to: str = None) -> str:
     if os.path.isabs(path):
         return os.path.normpath(path)
     if relative_to is None:
-        print("Path is not absolute but no base for relative paths was provided, using './'")
+        message = "Path is not absolute but no base for relative paths was provided, using './'"
+        print(message)
+        LOGGER.warning(message)
         relative_to = "./"
     relative_dir = os.path.dirname(os.path.abspath(relative_to))
     return os.path.normpath(os.path.abspath(os.path.join(relative_dir, path)))
@@ -140,9 +145,13 @@ def clear_folder(folder_path: str) -> None:
         try:
             if os.path.isfile(file_path) or os.path.islink(file_path):
                 os.remove(file_path)
-                print(f'  Deleted file: {file_path}')
+                message = f"  Deleted file: {file_path}"
+                print(message)
+                LOGGER.info(message)
         except OSError as e:
-            print(f'Failed to delete {file_path}. Reason: {e}')
+            message = f"Failed to delete {file_path}. Reason: {e}"
+            print(message)
+            LOGGER.warning(message)
 
 def parse_obs_def_ocean_mod(rst_file_path: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
     """Parse obs_def_ocean_mod.rst file to extract observation type definitions.
