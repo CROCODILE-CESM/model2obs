@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 def resolve_run_log_path(config: Dict[str, Any]) -> str:
@@ -21,7 +21,6 @@ def resolve_run_log_path(config: Dict[str, Any]) -> str:
 
     default_logs_folder = os.path.join(output_folder, "logs")
     return os.path.join(default_logs_folder, "model2obs.log")
-
 
 def setup_package_logger(config: Dict[str, Any], parallel: bool) -> Tuple[logging.Logger, str, str]:
     """Configure package logger and return logger, run-log path, and logs folder.
@@ -63,3 +62,24 @@ def setup_package_logger(config: Dict[str, Any], parallel: bool) -> Tuple[loggin
     package_logger.addHandler(file_handler)
 
     return package_logger, run_log_path, logs_folder
+
+
+def emit_progress(message: str, logger: Optional[logging.Logger] = None) -> None:
+    """Emit high-level progress to screen and log."""
+    print(message)
+    active_logger = logger or logging.getLogger(__name__)
+    active_logger.info(message)
+
+
+def emit_debug(message: str, logger: Optional[logging.Logger] = None) -> None:
+    """Emit detailed diagnostics to log only."""
+    active_logger = logger or logging.getLogger(__name__)
+    active_logger.debug(message)
+
+
+def emit_warning(message: str, logger: Optional[logging.Logger] = None) -> None:
+    """Emit warning to screen and log."""
+    print(f"Warning: {message}")
+    active_logger = logger or logging.getLogger(__name__)
+    active_logger.warning(message)
+

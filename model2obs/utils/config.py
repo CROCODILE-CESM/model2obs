@@ -7,7 +7,24 @@ import re
 from typing import Any, Dict, List, Tuple
 import yaml
 
+from . import logging_utils
+
 LOGGER = logging.getLogger(__name__)
+
+
+def _log_progress(message: str) -> None:
+    """Emit high-level progress to screen and log."""
+    logging_utils.emit_progress(message, LOGGER)
+
+
+def _log_debug(message: str) -> None:
+    """Emit detailed diagnostics to log only."""
+    logging_utils.emit_debug(message, LOGGER)
+
+
+def _log_warning(message: str) -> None:
+    """Emit warnings to screen and log."""
+    logging_utils.emit_warning(message, LOGGER)
 
 
 def resolve_path(path: str, relative_to: str = None) -> str:
@@ -16,9 +33,7 @@ def resolve_path(path: str, relative_to: str = None) -> str:
     if os.path.isabs(path):
         return os.path.normpath(path)
     if relative_to is None:
-        message = "Path is not absolute but no base for relative paths was provided, using './'"
-        print(message)
-        LOGGER.warning(message)
+        _log_warning("Path is not absolute but no base for relative paths was provided, using './'")
         relative_to = "./"
     relative_dir = os.path.dirname(os.path.abspath(relative_to))
     return os.path.normpath(os.path.abspath(os.path.join(relative_dir, path)))
@@ -145,13 +160,9 @@ def clear_folder(folder_path: str) -> None:
         try:
             if os.path.isfile(file_path) or os.path.islink(file_path):
                 os.remove(file_path)
-                message = f"  Deleted file: {file_path}"
-                print(message)
-                LOGGER.info(message)
+                _log_progress(f"  Deleted file: {file_path}")
         except OSError as e:
-            message = f"Failed to delete {file_path}. Reason: {e}"
-            print(message)
-            LOGGER.warning(message)
+            _log_warning(f"Failed to delete {file_path}. Reason: {e}")
 
 def parse_obs_def_ocean_mod(rst_file_path: str) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
     """Parse obs_def_ocean_mod.rst file to extract observation type definitions.
