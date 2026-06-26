@@ -68,13 +68,13 @@ class WorkflowModelObs(workflow.Workflow):
         if os.path.isfile(self.perfect_model_obs_log_file):
             os.remove(self.perfect_model_obs_log_file)
 
-    def _log_progress(self, message: str) -> None:
+    def _log_info(self, message: str) -> None:
         """Emit high-level progress information to screen and run log."""
         print(message)
         if self._run_logger is not None:
             self._run_logger.info(message)
 
-    def _log_detail(self, message: str) -> None:
+    def _log_debug(self, message: str) -> None:
         """Emit detailed diagnostics to the run log only."""
         if self._run_logger is not None:
             self._run_logger.debug(message)
@@ -114,7 +114,7 @@ class WorkflowModelObs(workflow.Workflow):
         )
         logger.addHandler(file_handler)
         self._run_logger = logger
-        self._log_progress(f"Detailed run log: {configured_path}")
+        self._log_info(f"Detailed run log: {configured_path}")
 
     def _validate_config(self) -> None:
         """Validate configuration parameters.
@@ -154,7 +154,7 @@ class WorkflowModelObs(workflow.Workflow):
         self.model_adapter.validate_run_options(self.run_opts)
 
         if clear_output:
-            self._log_progress("Clearing all output folders...")
+            self._log_info("Clearing all output folders...")
             output_folders = [
                 self.config['parquet_folder'],
                 self.config['input_nml_bck'],
@@ -163,34 +163,34 @@ class WorkflowModelObs(workflow.Workflow):
                 self.config['netcdf_output_folder'],
             ]
             for folder in output_folders:
-                self._log_progress(f"  Clearing folder: {folder}")
+                self._log_info(f"  Clearing folder: {folder}")
                 config_utils.clear_folder(folder)
             tmp_folder = self.config['tmp_folder']
-            self._log_progress(f"  Clearing folder: {tmp_folder}")
+            self._log_info(f"  Clearing folder: {tmp_folder}")
             shutil.rmtree(tmp_folder, ignore_errors=True)
             os.makedirs(tmp_folder, exist_ok=True)
-            self._log_progress("  All output folders cleared.")
-            self._log_progress("")
+            self._log_info("  All output folders cleared.")
+            self._log_info("")
 
         self._setup_run_logger()
         
         if not parquet_only:
-            self._log_progress("Starting files processing.")
+            self._log_info("Starting files processing.")
             files_processed = self.process_files(
                 trim_obs=trim_obs,
                 no_matching=no_matching,
                 force_obs_time=force_obs_time,
                 parallel=parallel,
             )
-            self._log_progress("")
+            self._log_info("")
         
         # Convert to parquet
-        self._log_progress("Converting obs_seq format to parquet and adding some diagnostics data...")
+        self._log_info("Converting obs_seq format to parquet and adding some diagnostics data...")
         self.merge_model_obs_to_parquet(trim_obs)
-        self._log_progress(f"  Parquet data saved to: {self.config['parquet_folder']}")
-        self._log_progress("")
+        self._log_info(f"  Parquet data saved to: {self.config['parquet_folder']}")
+        self._log_info("")
 
-        self._log_progress("Done!")
+        self._log_info("Done!")
 
 
     def process_files(self, trim_obs: bool = False, no_matching: bool = False,
@@ -213,7 +213,7 @@ class WorkflowModelObs(workflow.Workflow):
             raise ValueError("Configuration parameter 'perfect_model_obs_dir' missing: did you specify the path to the perfect_model_obs executable?")
 
         # Initialize base input.nml
-        self._log_progress("  Initializing input.nml for process_model_obs subprocess...")
+        self._log_info("  Initializing input.nml for process_model_obs subprocess...")
         self._initialize_model_namelist()
         
         # Print configuration
@@ -232,12 +232,12 @@ class WorkflowModelObs(workflow.Workflow):
         model_in_files = file_utils.get_sorted_files(self.config['model_files_folder'], "*.nc")
         obs_in_files = file_utils.get_sorted_files(self.config['obs_seq_in_folder'], "*")
 
-        self._log_progress(f"  Found {len(model_in_files)} files to process")
+        self._log_info(f"  Found {len(model_in_files)} files to process")
 
         # Get model boundaries if trimming observations
         hull_polygon, hull_points = None, None
         if trim_obs:
-            self._log_progress("  Getting model boundaries...")
+            self._log_info("  Getting model boundaries...")
             hull_polygon, hull_points = self.model_adapter.get_model_boundaries(self.config['ocean_geometry'])
 
         # Validate that model files have non-overlapping timestamps (cheap metadata read)
@@ -324,13 +324,13 @@ class WorkflowModelObs(workflow.Workflow):
             obs_folder = self.config['trimmed_obs_folder']
         else:
             obs_folder = self.config['obs_seq_in_folder']
-            self._log_detail(f"obs_seq_in_folder: {self.config['obs_seq_in_folder']}")
+            self._log_debug(f"obs_seq_in_folder: {self.config['obs_seq_in_folder']}")
 
         perf_obs_files = sorted(glob.glob(os.path.join(output_folder, "obs_seq*.out")))
         orig_obs_files = sorted(glob.glob(os.path.join(obs_folder, "*")))
 
-        self._log_detail(f"perf_obs_files: {perf_obs_files}")
-        self._log_detail(f"orig_obs_files: {orig_obs_files}")
+        self._log_debug(f"perf_obs_files: {perf_obs_files}")
+        self._log_debug(f"orig_obs_files: {orig_obs_files}")
         
         tmp_parquet_folder = os.path.join(parquet_folder, "tmp")
         os.makedirs(tmp_parquet_folder, exist_ok=True)
@@ -349,22 +349,22 @@ class WorkflowModelObs(workflow.Workflow):
 
         shutil.rmtree(tmp_parquet_folder)
         self._set_model_obs_df()
-        self._log_progress(f"  Total number of observations in output dataset: {len(self.get_all_model_obs_df())}")
-        self._log_progress(f"  Succesfull interpolations in output dataset   : {len(self.get_good_model_obs_df())}")
-        self._log_progress(f"  Failed interpolations in output dataset       : {len(self.get_failed_model_obs_df())}")
+        self._log_info(f"  Total number of observations in output dataset: {len(self.get_all_model_obs_df())}")
+        self._log_info(f"  Succesfull interpolations in output dataset   : {len(self.get_good_model_obs_df())}")
+        self._log_info(f"  Failed interpolations in output dataset       : {len(self.get_failed_model_obs_df())}")
 
     def _print_workflow_config(self, trim_obs: bool) -> None:
         """Print workflow configuration."""
-        self._log_progress("  Configuration:")
-        self._log_progress(f"    perfect_model_obs_dir: {self.config['perfect_model_obs_dir']}")
-        self._log_progress(f"    input_nml: {self._namelist.namelist_path}")
-        self._log_progress(f"    model_files_folder: {self.config['model_files_folder']}")
-        self._log_progress(f"    obs_seq_in_folder: {self.config['obs_seq_in_folder']}")
-        self._log_progress(f"    output_folder: {self.config['output_folder']}")
-        self._log_progress(f"    input_nml_bck: {self.config.get('input_nml_bck', 'input.nml.backup')}")
-        self._log_progress(f"    tmp_folder: {self.config['tmp_folder']}")
+        self._log_info("  Configuration:")
+        self._log_info(f"    perfect_model_obs_dir: {self.config['perfect_model_obs_dir']}")
+        self._log_info(f"    input_nml: {self._namelist.namelist_path}")
+        self._log_info(f"    model_files_folder: {self.config['model_files_folder']}")
+        self._log_info(f"    obs_seq_in_folder: {self.config['obs_seq_in_folder']}")
+        self._log_info(f"    output_folder: {self.config['output_folder']}")
+        self._log_info(f"    input_nml_bck: {self.config.get('input_nml_bck', 'input.nml.backup')}")
+        self._log_info(f"    tmp_folder: {self.config['tmp_folder']}")
         if trim_obs:
-            self._log_progress(f"    trimmed_obs_folder: {self.config.get('trimmed_obs_folder', 'trimmed_obs_seq')}")
+            self._log_info(f"    trimmed_obs_folder: {self.config.get('trimmed_obs_folder', 'trimmed_obs_seq')}")
     
     def _initialize_model_namelist(self) -> None:
         """Initialize model namelist parameters."""
@@ -377,7 +377,7 @@ class WorkflowModelObs(workflow.Workflow):
             "model_nml", "assimilation_period_seconds", self.config['time_window']['seconds'], string=False
         )
 
-        self._log_progress(f"ocean model: {self.model_adapter.ocean_model}")
+        self._log_info(f"ocean model: {self.model_adapter.ocean_model}")
         common_model_keys = self.model_adapter.get_common_model_keys()
         for key in self.config.keys():
             if key=='debug':
@@ -401,7 +401,7 @@ class WorkflowModelObs(workflow.Workflow):
 
         # Update observation types if specified in config
         if 'use_these_obs' in self.config:
-            self._log_progress("  Processing observation types from config...")
+            self._log_info("  Processing observation types from config...")
             rst_file_path = os.path.join(
                 self.config['perfect_model_obs_dir'],
                 '../../../observations/forward_operators/obs_def_ocean_mod.rst'
@@ -411,14 +411,14 @@ class WorkflowModelObs(workflow.Workflow):
                 expanded_obs_types = config_utils.validate_and_expand_obs_types(
                     self.config['use_these_obs'], obs_types_tuple
                 )
-                self._log_detail(f"Target observation types: {expanded_obs_types}")
+                self._log_debug(f"Target observation types: {expanded_obs_types}")
                 if not expanded_obs_types:
                     raise ValueError("Expanded observation types list cannot be empty")
                 self._namelist.update_namelist_param('obs_kind_nml', 'assimilate_these_obs_types', expanded_obs_types)
-                self._log_progress("    Updated obs_kind_nml section with observation types")
+                self._log_info("    Updated obs_kind_nml section with observation types")
             except (FileNotFoundError, ValueError) as e:
                 self._log_warning(f"Could not process observation types: {e}")
-                self._log_progress("Continuing with existing obs_kind_nml configuration")
+                self._log_info("Continuing with existing obs_kind_nml configuration")
 
         # Snapshot of the fully configured base content shared across worker threads.
         # Workers copy from this string rather than re-applying all common parameters.
@@ -498,17 +498,17 @@ class WorkflowModelObs(workflow.Workflow):
         Returns:
             Number of model-obs pairs processed for this model file.
         """
-        self._log_progress(f"    Processing model file {model_in_f}...")
+        self._log_info(f"    Processing model file {model_in_f}...")
 
         with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
             time_var = "time"  # open_dataset_ctx() renames model time varname to 'time'
             snapshots_nb = ds.sizes[time_var]
-            self._log_detail(f"Model file has {snapshots_nb} snapshots: {model_in_f}")
+            self._log_debug(f"Model file has {snapshots_nb} snapshots: {model_in_f}")
 
             if prematched_pairs is not None:
                 # ---- Parallel path: pairs pre-assigned; no time-matching needed ----
                 for local_match_index, (t_id, obs_in_file) in enumerate(prematched_pairs):
-                    self._log_progress(
+                    self._log_info(
                         f"      Processing pre-matched snapshot {t_id} "
                         f"with obs_seq {os.path.basename(obs_in_file)}..."
                     )
@@ -523,7 +523,7 @@ class WorkflowModelObs(workflow.Workflow):
                             "ncks", "-d", f"{model_time_varname},{t_id}",
                             model_in_f, tmp_model_in_file,
                         ]
-                        self._log_detail(f"Calling {' '.join(ncks)}")
+                        self._log_debug(f"Calling {' '.join(ncks)}")
                         subprocess.run(ncks, check=True)
                     else:
                         tmp_model_in_file = model_in_f
@@ -545,22 +545,22 @@ class WorkflowModelObs(workflow.Workflow):
 
             local_match_index = 0
             for t_id, time in enumerate(ds[time_var].values):
-                self._log_detail(f"Processing snapshot {t_id+1} of {snapshots_nb} for {model_in_f}")
+                self._log_debug(f"Processing snapshot {t_id+1} of {snapshots_nb} for {model_in_f}")
                 found_match = False
                 for obs_in_file in obs_in_files:
                     if obs_in_file in used_obs_in_files:
-                        self._log_detail(
+                        self._log_debug(
                             f"Skipping obs_seq {obs_in_file}: already used by an earlier model snapshot."
                         )
                         continue
 
-                    self._log_detail(f"Checking obs_seq file {obs_in_file}")
+                    self._log_debug(f"Checking obs_seq file {obs_in_file}")
                     obs_in_df = obsq.ObsSequence(obs_in_file)
                     t1 = obs_in_df.df.time.min()
                     t2 = obs_in_df.df.time.max()
-                    self._log_detail(f"obs_seq min time: {t1}")
-                    self._log_detail(f"obs_seq max time: {t2}")
-                    self._log_detail(f"snapshot time: {pd.Timestamp(time)}")
+                    self._log_debug(f"obs_seq min time: {t1}")
+                    self._log_debug(f"obs_seq max time: {t2}")
+                    self._log_debug(f"snapshot time: {pd.Timestamp(time)}")
 
                     tw = timedelta(
                         days=self.config["time_window"]["days"],
@@ -570,13 +570,13 @@ class WorkflowModelObs(workflow.Workflow):
                     ts = pd.Timestamp(time)
                     ts1 = ts - half_tw
                     ts2 = ts + half_tw
-                    self._log_detail(
+                    self._log_debug(
                         f"Validating obs_seq time bounds in window {tw} centered on {ts}, "
                         f"i.e. between {ts1} and {ts2}."
                     )
 
                     if (ts1 <= t1 <= ts2) and (ts1 <= t2 <= ts2):
-                        self._log_detail(
+                        self._log_debug(
                             f"Accepted obs_seq {obs_in_file} for snapshot {t_id+1}: "
                             f"range [{t1}, {t2}] is within [{ts1}, {ts2}]."
                         )
@@ -591,7 +591,7 @@ class WorkflowModelObs(workflow.Workflow):
                                 "ncks", "-d", f"{model_time_varname},{t_id}",
                                 model_in_f, tmp_model_in_file,
                             ]
-                            self._log_detail(f"Calling {' '.join(ncks)}")
+                            self._log_debug(f"Calling {' '.join(ncks)}")
                             subprocess.run(ncks, check=True)
                         else:
                             tmp_model_in_file = model_in_f
@@ -608,7 +608,7 @@ class WorkflowModelObs(workflow.Workflow):
                         local_match_index += 1
                         found_match = True
                         break
-                    self._log_detail(
+                    self._log_debug(
                         f"Discarded obs_seq {obs_in_file}: range [{t1}, {t2}] is outside "
                         f"snapshot window [{ts1}, {ts2}]."
                     )
@@ -645,12 +645,12 @@ class WorkflowModelObs(workflow.Workflow):
             A dict mapping each model file path to a list of
             ``(snapshot_index, obs_file_path)`` tuples in match order.
         """
-        self._log_progress("  Pre-matching obs files to model snapshots...")
+        self._log_info("  Pre-matching obs files to model snapshots...")
         used_obs: List[str] = []
         result: Dict[str, List[Tuple[int, str]]] = {f: [] for f in model_in_files}
 
         for model_in_f in model_in_files:
-            self._log_detail(f"Pre-matching model file: {model_in_f}")
+            self._log_debug(f"Pre-matching model file: {model_in_f}")
             with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
                 for t_id, time in enumerate(ds["time"].values):
                     tw = timedelta(
@@ -661,14 +661,14 @@ class WorkflowModelObs(workflow.Workflow):
                     ts = pd.Timestamp(time)
                     ts1 = ts - half_tw
                     ts2 = ts + half_tw
-                    self._log_detail(
+                    self._log_debug(
                         f"Snapshot {t_id+1} for {model_in_f}: matching window [{ts1}, {ts2}]"
                     )
                     snapshot_matched = False
 
                     for obs_file in obs_in_files:
                         if obs_file in used_obs:
-                            self._log_detail(f"Skipping obs_seq {obs_file}: already assigned earlier.")
+                            self._log_debug(f"Skipping obs_seq {obs_file}: already assigned earlier.")
                             continue
                         obs_df = obsq.ObsSequence(obs_file)
                         t1 = obs_df.df.time.min()
@@ -677,12 +677,12 @@ class WorkflowModelObs(workflow.Workflow):
                             used_obs.append(obs_file)
                             result[model_in_f].append((t_id, obs_file))
                             snapshot_matched = True
-                            self._log_detail(
+                            self._log_debug(
                                 f"Assigned obs_seq {obs_file} to model {model_in_f} snapshot {t_id+1}: "
                                 f"obs range [{t1}, {t2}] within [{ts1}, {ts2}]."
                             )
                             break
-                        self._log_detail(
+                        self._log_debug(
                             f"Rejected obs_seq {obs_file} for model {model_in_f} snapshot {t_id+1}: "
                             f"obs range [{t1}, {t2}] outside [{ts1}, {ts2}]."
                         )
@@ -693,7 +693,7 @@ class WorkflowModelObs(workflow.Workflow):
                         )
 
         total = sum(len(v) for v in result.values())
-        self._log_progress(
+        self._log_info(
             f"  Pre-matching complete: {total} pair(s) assigned across "
             f"{len(model_in_files)} model file(s)."
         )
@@ -762,7 +762,7 @@ class WorkflowModelObs(workflow.Workflow):
 
         obs_in_file_nml = obs_in_file
         if trim_obs:
-            self._log_progress(f"        Trimming obs_seq file {obs_in_filename} to model grid boundaries...")
+            self._log_info(f"        Trimming obs_seq file {obs_in_filename} to model grid boundaries...")
             trimmed_obs_file = os.path.join(
                 self.config['trimmed_obs_folder'],
                 f"trimmed_obs_seq_{file_number}.in"
@@ -785,11 +785,11 @@ class WorkflowModelObs(workflow.Workflow):
         if obs_in_file != obs_in_file_nml:
             _obs_original_count = len(obsq.ObsSequence(obs_in_file).df)
 
-        self._log_progress(f"        Processing file #{counter + 1}:")
-        self._log_progress(f"          Model input file: {model_in_file}")
-        self._log_progress(f"          Obs input file: {obs_in_file_nml}")
-        self._log_progress(f"          Perfect output file: {perfect_output_filename}")
-        self._log_progress(f"          Obs output file: {obs_output_filename}")
+        self._log_info(f"        Processing file #{counter + 1}:")
+        self._log_info(f"          Model input file: {model_in_file}")
+        self._log_info(f"          Obs input file: {obs_in_file_nml}")
+        self._log_info(f"          Perfect output file: {perfect_output_filename}")
+        self._log_info(f"          Obs output file: {obs_output_filename}")
 
         worker_tmpdir = tempfile.mkdtemp(dir=self.config['tmp_folder'])
         try:
@@ -816,7 +816,7 @@ class WorkflowModelObs(workflow.Workflow):
                 if precomputed_model_time is not None:
                     model_time_days, model_time_seconds = precomputed_model_time
                 else:
-                    self._log_detail(
+                    self._log_debug(
                         "Retrieving model time from model input file and updating namelist..."
                     )
                     model_time_days, model_time_seconds = self.model_adapter.get_model_time_in_days_seconds(
@@ -832,7 +832,7 @@ class WorkflowModelObs(workflow.Workflow):
                     model_time_days, model_time_seconds, "model file"
                 )
             else:
-                self._log_detail("Retrieving obs time from obs_seq and updating namelist...")
+                self._log_debug("Retrieving obs time from obs_seq and updating namelist...")
                 obs_time_days, obs_time_seconds = file_utils.get_obs_time_in_days_seconds(obs_in_file)
                 local_nml.update_namelist_param(
                     "perfect_model_obs_nml", "init_time_days", obs_time_days, string=False
@@ -852,11 +852,11 @@ class WorkflowModelObs(workflow.Workflow):
             local_nml.write_namelist(input_nml_bck_path)
             # Symlink lives inside worker_tmpdir so the subprocess finds it
             local_nml.symlink_to_namelist(input_nml_bck_path)
-            self._log_detail(f"{input_nml_bck_path} created.")
-            self._log_progress("")
+            self._log_debug(f"{input_nml_bck_path} created.")
+            self._log_info("")
 
             # Call perfect_model_obs from the isolated worker directory
-            self._log_progress("          Calling perfect_model_obs...")
+            self._log_info("          Calling perfect_model_obs...")
             perfect_model_obs_exe = os.path.join(
                 self.config['perfect_model_obs_dir'], "perfect_model_obs"
             )
@@ -915,9 +915,9 @@ class WorkflowModelObs(workflow.Workflow):
                     f"See log: {log_file_path}"
                 )
 
-            self._log_progress(f"          Perfect model output saved to: {perfect_output_path}")
-            self._log_progress(f"          obs_seq.out output saved to: {obs_output_path}")
-            self._log_progress(f"          perfect_model_obs log saved to: {log_file_path}")
+            self._log_info(f"          Perfect model output saved to: {perfect_output_path}")
+            self._log_info(f"          obs_seq.out output saved to: {obs_output_path}")
+            self._log_info(f"          perfect_model_obs log saved to: {log_file_path}")
         finally:
             shutil.rmtree(worker_tmpdir, ignore_errors=True)
 
@@ -1040,7 +1040,7 @@ class WorkflowModelObs(workflow.Workflow):
                                     f"pair_summary_{file_number}.log")
             with open(log_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines) + "\n")
-            self._log_detail(f"Pair summary log saved to: {log_path}")
+            self._log_debug(f"Pair summary log saved to: {log_path}")
         except Exception as exc:  # pylint: disable=broad-except
             print(f"WARNING: could not write pair summary log: {exc}")
             if self._run_logger is not None:
@@ -1210,7 +1210,7 @@ class WorkflowModelObs(workflow.Workflow):
 
         try:
             tolerances = self.config['netcdf_coord_tolerance']
-            self._log_progress(f"  Writing NetCDF: {netcdf_file}")
+            self._log_info(f"  Writing NetCDF: {netcdf_file}")
             netcdf_output.write_interpolated_to_netcdf(
                 ddf=dd.from_pandas(merged),
                 output_path=netcdf_file,
