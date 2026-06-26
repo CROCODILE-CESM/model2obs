@@ -83,18 +83,18 @@ def emit_warning(message: str, logger: Optional[logging.Logger] = None) -> None:
     active_logger = logger or logging.getLogger(__name__)
     active_logger.warning(message)
 
- class ModuleLogger:
-     def __init__(self, name: str) -> None:
-         self._logger = logging.getLogger(name)
- 
-     def info(self, message: str) -> None:
-         emit_info(message, self._logger)
- 
-     def debug(self, message: str) -> None:
-         emit_debug(message, self._logger)
- 
-     def warning(self, message: str) -> None:
-         emit_warning(message, self._logger)
- 
- def get_module_logger(name: str) -> ModuleLogger:
-     return ModuleLogger(name)
+class ModuleLogger:
+    def __init__(self, name: str) -> None:
+        self._logger = logging.getLogger(name)
+
+    def info(self, message: str) -> None:
+        emit_info(message, self._logger)
+
+    def debug(self, message: str) -> None:
+        emit_debug(message, self._logger)
+
+    def warning(self, message: str) -> None:
+        emit_warning(message, self._logger)
+
+def get_module_logger(name: str) -> ModuleLogger:
+    return ModuleLogger(name)
