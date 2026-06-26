@@ -108,7 +108,7 @@ class WorkflowModelObs(workflow.Workflow):
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(
             logging.Formatter(
-                fmt="%(asctime)s | %(levelname)s | %(threadName)s | %(name)s | %(message)s",
+                fmt="%(asctime)s | %(threadName)s | %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
         )
