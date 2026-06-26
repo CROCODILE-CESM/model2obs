@@ -576,8 +576,14 @@ class WorkflowModelObs(workflow.Workflow):
         used_obs: List[str] = []
         result: Dict[str, List[Tuple[int, str]]] = {f: [] for f in model_in_files}
 
-        for model_in_f in model_in_files:
+        model_f_nb = len(model_in_files)
+        for model_f_id, model_in_f in enumerate(model_in_files):
+            print(
+                f"     Looking for obs files matching {model_in_f} "
+                f"[file {model_f_id+1}/{model_f_nb}]"
+            )
             with self.model_adapter.open_dataset_ctx(model_in_f) as ds:
+                times_nb = len(ds["time"].values)
                 for t_id, time in enumerate(ds["time"].values):
                     tw = timedelta(
                         days=self.config["time_window"]["days"],
@@ -587,7 +593,12 @@ class WorkflowModelObs(workflow.Workflow):
                     ts = pd.Timestamp(time)
                     ts1 = ts - half_tw
                     ts2 = ts + half_tw
+                    print(
+                        f"       Looking for obs file matching {ts1} to {ts2} range "
+                        f"[range {t_id+1}/{times_nb}]"
+                    )
 
+                    obs_file_found = False
                     for obs_file in obs_in_files:
                         if obs_file in used_obs:
                             continue
@@ -595,13 +606,25 @@ class WorkflowModelObs(workflow.Workflow):
                         t1 = obs_df.df.time.min()
                         t2 = obs_df.df.time.max()
                         if (ts1 <= t1 <= ts2) and (ts1 <= t2 <= ts2):
+                            obs_file_found = True
                             used_obs.append(obs_file)
                             result[model_in_f].append((t_id, obs_file))
                             break
-
+                    if obs_file_found:
+                        print(f"       {obs_file} added.")
+                    else:
+                        print(
+                            f"       WARNING: No obs file found that matches {ts1} to {ts2} range "
+                            f"[range {t_id+1}/{times_nb}]"
+                        )
         total = sum(len(v) for v in result.values())
         print(f"  Pre-matching complete: {total} pair(s) assigned across "
               f"{len(model_in_files)} model file(s).")
+        for model_in_f in model_in_files:
+            print(f"  {model_in_f} matched with {len(result[model_in_f])} files:")
+            for obs_f in result[model_in_f]:
+                print(f"    {obs_f[1]}")
+
         return result
 
     def _process_with_time_matching(self, model_in_files: List[str], obs_in_files: List[str],
