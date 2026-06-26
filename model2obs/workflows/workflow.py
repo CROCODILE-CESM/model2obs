@@ -5,10 +5,26 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type
 
+from ..utils import logging_utils
 from ..utils import config as config_utils
 from ..model_adapter.registry import create_model_adapter
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _log_progress(message: str) -> None:
+    """Emit high-level progress to screen and log."""
+    logging_utils.emit_progress(message, LOGGER)
+
+
+def _log_debug(message: str) -> None:
+    """Emit detailed diagnostics to log only."""
+    logging_utils.emit_debug(message, LOGGER)
+
+
+def _log_warning(message: str) -> None:
+    """Emit warnings to screen and log."""
+    logging_utils.emit_warning(message, LOGGER)
 
 class Workflow(ABC):
     """Base class for all model2obs workflows.
@@ -110,9 +126,6 @@ class Workflow(ABC):
     
     def print_config(self) -> None:
         """Print current configuration."""
-        print("Configuration:")
-        LOGGER.info("Configuration:")
+        _log_progress("Configuration:")
         for key, value in self.config.items():
-            message = f"  {key}: {value}"
-            print(message)
-            LOGGER.info(message)
+            _log_progress(f"  {key}: {value}")

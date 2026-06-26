@@ -70,23 +70,21 @@ class WorkflowModelObs(workflow.Workflow):
         if os.path.isfile(self.perfect_model_obs_log_file):
             os.remove(self.perfect_model_obs_log_file)
 
-    def _log_info(self, message: str) -> None:
+    def _log_progress(self, message: str) -> None:
         """Emit high-level progress information to screen and run log."""
-        print(message)
-        if self._run_logger is not None:
-            self._run_logger.info(message)
+        logging_utils.emit_progress(message, self._run_logger)
+
+    def _log_info(self, message: str) -> None:
+        """Backward-compatible alias for progress messages."""
+        self._log_progress(message)
 
     def _log_debug(self, message: str) -> None:
         """Emit detailed diagnostics to the run log only."""
-        if self._run_logger is not None:
-            self._run_logger.debug(message)
+        logging_utils.emit_debug(message, self._run_logger)
 
     def _log_warning(self, message: str) -> None:
         """Emit warnings to screen and run log."""
-        warning_message = f"Warning: {message}"
-        print(warning_message)
-        if self._run_logger is not None:
-            self._run_logger.warning(message)
+        logging_utils.emit_warning(message, self._run_logger)
 
     def _setup_run_logger(self, parallel: bool) -> None:
         """Initialize per-run file logger for detailed diagnostics."""
@@ -95,7 +93,7 @@ class WorkflowModelObs(workflow.Workflow):
         )
         self._logs_folder = logs_folder
         self._run_logger = logging.getLogger(__name__)
-        self._log_info(f"Detailed run log: {run_log_path}")
+        self._log_progress(f"Detailed run log: {run_log_path}")
 
     def _validate_config(self) -> None:
         """Validate configuration parameters.

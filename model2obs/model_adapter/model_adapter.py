@@ -15,11 +15,27 @@ import numpy as np
 import xarray as xr
 
 from ..utils import config as config_utils
+from ..utils import logging_utils
 from ..io import file_utils
 
 from dataclasses import dataclass
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _log_progress(message: str) -> None:
+    """Emit high-level progress to screen and log."""
+    logging_utils.emit_progress(message, LOGGER)
+
+
+def _log_debug(message: str) -> None:
+    """Emit detailed diagnostics to log only."""
+    logging_utils.emit_debug(message, LOGGER)
+
+
+def _log_warning(message: str) -> None:
+    """Emit warnings to screen and log."""
+    logging_utils.emit_warning(message, LOGGER)
 
 @dataclass(frozen=True)
 class ModelAdapterCapabilities:
@@ -72,31 +88,21 @@ class ModelAdapter(ABC):
     def validate_paths(self, config, run_opts) -> None:
         """Validate paths provided in config file."""
 
-        message = "  Validating model_files_folder..."
-        print(message)
-        LOGGER.info(message)
+        _log_progress("  Validating model_files_folder...")
         config_utils.check_directory_not_empty(config['model_files_folder'], "model_files_folder")
         config_utils.check_nc_files_only(config['model_files_folder'], "model_files_folder")
 
-        message = "  Validating obs_seq_in_folder..."
-        print(message)
-        LOGGER.info(message)
+        _log_progress("  Validating obs_seq_in_folder...")
         config_utils.check_directory_not_empty(config['obs_seq_in_folder'], "obs_seq_in_folder")
 
-        message = "  Validating output_folder..."
-        print(message)
-        LOGGER.info(message)
+        _log_progress("  Validating output_folder...")
         config_utils.check_or_create_folder(config['output_folder'], "output_folder")
 
-        message = "  Validating tmp_folder..."
-        print(message)
-        LOGGER.info(message)
+        _log_progress("  Validating tmp_folder...")
         config_utils.check_or_create_folder(config['tmp_folder'], "tmp_folder")
 
         if run_opts.trim_obs:
-            message = "  Validating trimmed_obs_folder..."
-            print(message)
-            LOGGER.info(message)
+            _log_progress("  Validating trimmed_obs_folder...")
             trimmed_obs_folder = config.get('trimmed_obs_folder', 'trimmed_obs_seq')
             config['trimmed_obs_folder'] = trimmed_obs_folder
             config_utils.check_or_create_folder(trimmed_obs_folder, "trimmed_obs_folder")
@@ -105,14 +111,10 @@ class ModelAdapter(ABC):
         input_nml_bck = config.get('input_nml_bck', 'input.nml.backup')
         config['input_nml_bck'] = input_nml_bck
         
-        message = "  Validating input_nml_bck..."
-        print(message)
-        LOGGER.info(message)
+        _log_progress("  Validating input_nml_bck...")
         config_utils.check_or_create_folder(input_nml_bck, "input_nml_bck")
 
-        message = "  Validating parquet_folder..."
-        print(message)
-        LOGGER.info(message)
+        _log_progress("  Validating parquet_folder...")
         config_utils.check_or_create_folder(config["parquet_folder"], "parquet_folder")
 
         return
