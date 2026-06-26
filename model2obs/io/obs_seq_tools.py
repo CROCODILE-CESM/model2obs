@@ -6,7 +6,7 @@ import pydartdiags.obs_sequence.obs_sequence as obsq
 from shapely.geometry import Polygon
 
 from ..utils import logging_utils
-_logger = get_module_logger(__name__)
+_logger = logging_utils.get_module_logger(__name__)
 
 try:
     from shapely import contains_xy

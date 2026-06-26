@@ -9,7 +9,7 @@ from ..utils import logging_utils
 from ..utils import config as config_utils
 from ..model_adapter.registry import create_model_adapter
 
-_logger = get_module_logger(__name__)
+_logger = logging_utils.get_module_logger(__name__)
 
 class Workflow(ABC):
     """Base class for all model2obs workflows.
