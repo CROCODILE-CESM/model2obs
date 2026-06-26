@@ -41,10 +41,11 @@ tmp_folder: $WORK/model2obs_output/workflow_1/tmp/
 
 ####### LOGGING #######
 # model2obs writes concise progress to screen and detailed diagnostics to a run log.
-# Default (if unset): <output_folder>/model2obs.log
+# Default (if unset): <output_folder>/logs/model2obs.log
+# Per-pair logs (perfect_model_obs_*.log, pair_summary_*.log) are stored in the same logs folder.
 # Optional override example (full path):
 # logging:
-#   run_log_file: $WORK/model2obs_output/workflow_1/out_obs_seq_in/model2obs.log
+#   run_log_file: $WORK/model2obs_output/workflow_1/logs/model2obs.log
 
 ####### DART CONFIGURATION #######
 # Path to DART's perfect_model_obs executable directory: it should point to your

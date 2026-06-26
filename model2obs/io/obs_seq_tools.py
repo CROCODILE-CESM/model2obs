@@ -1,5 +1,6 @@
 """Observation sequence handling utilities for model2obs workflows."""
 
+import logging
 import numpy as np
 import pydartdiags.obs_sequence.obs_sequence as obsq
 from shapely.geometry import Polygon
@@ -8,6 +9,8 @@ try:
     from shapely import contains_xy
 except ImportError:
     from shapely.vectorized import contains as contains_xy
+
+LOGGER = logging.getLogger(__name__)
 
 
 def trim_obs_seq_in(obs_in_file: str, hull_polygon: Polygon, hull_points: np.ndarray, trimmed_obs_file: str) -> None:
@@ -24,15 +27,25 @@ def trim_obs_seq_in(obs_in_file: str, hull_polygon: Polygon, hull_points: np.nda
     # Get bounding box for print
     lon_min, lat_min = hull_points.min(axis=0)
     lon_max, lat_max = hull_points.max(axis=0)
-    print("           Convex hull boundaries:")
-    print(f"            Longitude: {lon_min:.2f}° to {lon_max:.2f}° (0-360 convention)")
-    print(f"            Latitude: {lat_min:.2f}° to {lat_max:.2f}°")
+    message = "           Convex hull boundaries:"
+    print(message)
+    LOGGER.info(message)
+    message = f"            Longitude: {lon_min:.2f}° to {lon_max:.2f}° (0-360 convention)"
+    print(message)
+    LOGGER.info(message)
+    message = f"            Latitude: {lat_min:.2f}° to {lat_max:.2f}°"
+    print(message)
+    LOGGER.info(message)
 
     obs_seq_in = obsq.ObsSequence(obs_in_file)
     obs_lon = obs_seq_in.df['longitude'].values
     obs_lat = obs_seq_in.df['latitude'].values
 
-    print(f"           Number of observations before filtering to convex hull: {len(obs_seq_in.df)}")
+    message = (
+        f"           Number of observations before filtering to convex hull: {len(obs_seq_in.df)}"
+    )
+    print(message)
+    LOGGER.info(message)
 
     # Create a mask for observations inside the convex hull
     within_hull_mask = contains_xy(hull_polygon, obs_lon, obs_lat)
@@ -41,8 +54,17 @@ def trim_obs_seq_in(obs_in_file: str, hull_polygon: Polygon, hull_points: np.nda
 
     obs_seq_in_original_df = obs_seq_in.df.copy()
     obs_seq_in.df = obs_seq_in.df[within_hull_mask].reset_index(drop=True)
-    print(f"           Number of observations after filtering to convex hull: {len(obs_seq_in.df)}")
-    print(f"           Percentage of original observations retained: {len(obs_seq_in.df)/len(obs_seq_in_original_df)*100:.1f}%")
+    message = f"           Number of observations after filtering to convex hull: {len(obs_seq_in.df)}"
+    print(message)
+    LOGGER.info(message)
+    message = (
+        f"           Percentage of original observations retained: "
+        f"{len(obs_seq_in.df)/len(obs_seq_in_original_df)*100:.1f}%"
+    )
+    print(message)
+    LOGGER.info(message)
 
     obs_seq_in.write_obs_seq(trimmed_obs_file)
-    print(f"           Trimmed file stored to {trimmed_obs_file}.")
+    message = f"           Trimmed file stored to {trimmed_obs_file}."
+    print(message)
+    LOGGER.info(message)

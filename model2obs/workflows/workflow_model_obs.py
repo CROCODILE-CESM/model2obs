@@ -21,6 +21,7 @@ from . import workflow
 from ..io import file_utils
 from ..io import obs_seq_tools
 from ..utils import config as config_utils
+from ..utils import logging_utils
 from ..utils import namelist
 
 from dataclasses import dataclass
@@ -65,6 +66,7 @@ class WorkflowModelObs(workflow.Workflow):
         self.model_obs_df = None
         self.perfect_model_obs_log_file = "perfect_model_obs.log"
         self._run_logger: Optional[logging.Logger] = None
+        self._logs_folder: str = os.path.dirname(logging_utils.resolve_run_log_path(config))
         if os.path.isfile(self.perfect_model_obs_log_file):
             os.remove(self.perfect_model_obs_log_file)
 
@@ -86,35 +88,14 @@ class WorkflowModelObs(workflow.Workflow):
         if self._run_logger is not None:
             self._run_logger.warning(message)
 
-    def _setup_run_logger(self) -> None:
+    def _setup_run_logger(self, parallel: bool) -> None:
         """Initialize per-run file logger for detailed diagnostics."""
-        logging_cfg_raw = self.config.get("logging")
-        logging_cfg = logging_cfg_raw if isinstance(logging_cfg_raw, dict) else {}
-        default_log_path = os.path.join(self.config["output_folder"], "model2obs.log")
-        configured_path = logging_cfg.get("run_log_file", default_log_path)
-        if not os.path.isabs(configured_path):
-            configured_path = os.path.join(self.config["output_folder"], configured_path)
-        os.makedirs(os.path.dirname(configured_path), exist_ok=True)
-
-        logger_name = f"model2obs.workflow.run.{id(self)}"
-        logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        for handler in logger.handlers:
-            handler.close()
-        logger.handlers.clear()
-
-        file_handler = logging.FileHandler(configured_path, mode="w", encoding="utf-8")
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(
-            logging.Formatter(
-                fmt="%(asctime)s | %(threadName)s | %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
+        _, run_log_path, logs_folder = logging_utils.setup_package_logger(
+            self.config, parallel=parallel
         )
-        logger.addHandler(file_handler)
-        self._run_logger = logger
-        self._log_info(f"Detailed run log: {configured_path}")
+        self._logs_folder = logs_folder
+        self._run_logger = logging.getLogger(__name__)
+        self._log_info(f"Detailed run log: {run_log_path}")
 
     def _validate_config(self) -> None:
         """Validate configuration parameters.
@@ -154,6 +135,8 @@ class WorkflowModelObs(workflow.Workflow):
         self.model_adapter.validate_run_options(self.run_opts)
 
         if clear_output:
+            run_log_path = logging_utils.resolve_run_log_path(self.config)
+            logs_folder = os.path.dirname(run_log_path)
             self._log_info("Clearing all output folders...")
             output_folders = [
                 self.config['parquet_folder'],
@@ -161,6 +144,7 @@ class WorkflowModelObs(workflow.Workflow):
                 self.config['trimmed_obs_folder'],
                 self.config['output_folder'],
                 self.config['netcdf_output_folder'],
+                logs_folder,
             ]
             for folder in output_folders:
                 self._log_info(f"  Clearing folder: {folder}")
@@ -172,7 +156,7 @@ class WorkflowModelObs(workflow.Workflow):
             self._log_info("  All output folders cleared.")
             self._log_info("")
 
-        self._setup_run_logger()
+        self._setup_run_logger(parallel=parallel)
         
         if not parquet_only:
             self._log_info("Starting files processing.")
@@ -734,9 +718,9 @@ class WorkflowModelObs(workflow.Workflow):
         simultaneously without shared-state conflicts.
 
         The per-pair DART log is written to
-        ``<output_folder>/perfect_model_obs_<NNNN>.log``.  A human-readable
+        ``<logs_folder>/perfect_model_obs_<NNNN>.log``.  A human-readable
         pair summary (files used, observation counts, interpolation success
-        rate) is written to ``<output_folder>/pair_summary_<NNNN>.log``
+        rate) is written to ``<logs_folder>/pair_summary_<NNNN>.log``
         regardless of whether DART exits successfully.
 
         Args:
@@ -861,7 +845,7 @@ class WorkflowModelObs(workflow.Workflow):
                 self.config['perfect_model_obs_dir'], "perfect_model_obs"
             )
             log_file_path = os.path.join(
-                self.config['output_folder'], f"perfect_model_obs_{file_number}.log"
+                self._logs_folder, f"perfect_model_obs_{file_number}.log"
             )
             with open(log_file_path, "w") as logfile:
                 process = subprocess.Popen(
@@ -942,7 +926,7 @@ class WorkflowModelObs(workflow.Workflow):
     ) -> None:
         """Write a plain-text key-value summary log for one model-observation pair.
 
-        The log is written to ``<output_folder>/pair_summary_<file_number>.log``.
+        The log is written to ``<logs_folder>/pair_summary_<file_number>.log``.
         If writing fails for any reason (e.g. disk full, permission error), a
         warning is printed and the workflow continues unaffected.
 
@@ -1036,15 +1020,13 @@ class WorkflowModelObs(workflow.Workflow):
                 lines.append(_line("Interpolation counts",
                                    "obs_seq.out not found or QC column absent"))
 
-            log_path = os.path.join(self.config["output_folder"],
+            log_path = os.path.join(self._logs_folder,
                                     f"pair_summary_{file_number}.log")
             with open(log_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines) + "\n")
             self._log_debug(f"Pair summary log saved to: {log_path}")
         except Exception as exc:  # pylint: disable=broad-except
-            print(f"WARNING: could not write pair summary log: {exc}")
-            if self._run_logger is not None:
-                self._run_logger.warning("could not write pair summary log: %s", exc)
+            self._log_warning(f"could not write pair summary log: {exc}")
 
     def _merge_pair_to_parquet(self, perf_obs_file: str, orig_obs_file: str,
                               parquet_path: str, pair_index: int = 0) -> None:
@@ -1273,6 +1255,8 @@ class WorkflowModelObs(workflow.Workflow):
 
         if filename is None:
             print(self._namelist.content)
+            if self._run_logger is not None:
+                self._run_logger.info("Previewed namelist content:\n%s", self._namelist.content)
 
         else:
             self._namelist.write_namelist(filename)

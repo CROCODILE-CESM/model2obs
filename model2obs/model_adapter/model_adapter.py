@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from collections.abc import Iterator
+import logging
 
 import dask.dataframe as dd
 import numpy as np
@@ -17,6 +18,8 @@ from ..utils import config as config_utils
 from ..io import file_utils
 
 from dataclasses import dataclass
+
+LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ModelAdapterCapabilities:
@@ -69,21 +72,31 @@ class ModelAdapter(ABC):
     def validate_paths(self, config, run_opts) -> None:
         """Validate paths provided in config file."""
 
-        print("  Validating model_files_folder...")
+        message = "  Validating model_files_folder..."
+        print(message)
+        LOGGER.info(message)
         config_utils.check_directory_not_empty(config['model_files_folder'], "model_files_folder")
         config_utils.check_nc_files_only(config['model_files_folder'], "model_files_folder")
 
-        print("  Validating obs_seq_in_folder...")
+        message = "  Validating obs_seq_in_folder..."
+        print(message)
+        LOGGER.info(message)
         config_utils.check_directory_not_empty(config['obs_seq_in_folder'], "obs_seq_in_folder")
 
-        print("  Validating output_folder...")
+        message = "  Validating output_folder..."
+        print(message)
+        LOGGER.info(message)
         config_utils.check_or_create_folder(config['output_folder'], "output_folder")
 
-        print("  Validating tmp_folder...")
+        message = "  Validating tmp_folder..."
+        print(message)
+        LOGGER.info(message)
         config_utils.check_or_create_folder(config['tmp_folder'], "tmp_folder")
 
         if run_opts.trim_obs:
-            print("  Validating trimmed_obs_folder...")
+            message = "  Validating trimmed_obs_folder..."
+            print(message)
+            LOGGER.info(message)
             trimmed_obs_folder = config.get('trimmed_obs_folder', 'trimmed_obs_seq')
             config['trimmed_obs_folder'] = trimmed_obs_folder
             config_utils.check_or_create_folder(trimmed_obs_folder, "trimmed_obs_folder")
@@ -92,10 +105,14 @@ class ModelAdapter(ABC):
         input_nml_bck = config.get('input_nml_bck', 'input.nml.backup')
         config['input_nml_bck'] = input_nml_bck
         
-        print("  Validating input_nml_bck...")
+        message = "  Validating input_nml_bck..."
+        print(message)
+        LOGGER.info(message)
         config_utils.check_or_create_folder(input_nml_bck, "input_nml_bck")
 
-        print("  Validating parquet_folder...")
+        message = "  Validating parquet_folder..."
+        print(message)
+        LOGGER.info(message)
         config_utils.check_or_create_folder(config["parquet_folder"], "parquet_folder")
 
         return
