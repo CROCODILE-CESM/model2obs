@@ -8,23 +8,7 @@ import tempfile
 from typing import Any, Dict, List, Optional, Union
 
 from . import logging_utils
-
-LOGGER = logging.getLogger(__name__)
-
-
-def _log_progress(message: str) -> None:
-    """Emit high-level progress to screen and log."""
-    logging_utils.emit_progress(message, LOGGER)
-
-
-def _log_debug(message: str) -> None:
-    """Emit detailed diagnostics to log only."""
-    logging_utils.emit_debug(message, LOGGER)
-
-
-def _log_warning(message: str) -> None:
-    """Emit warnings to screen and log."""
-    logging_utils.emit_warning(message, LOGGER)
+_logger = get_module_logger(__name__)
 
 
 class Namelist():
@@ -50,14 +34,14 @@ class Namelist():
         """
 
         self._working_dir = working_dir if working_dir is not None else os.getcwd()
-        _log_progress("    Setting up symlink for input.nml...")
+        _logger.info("    Setting up symlink for input.nml...")
         self.namelist_path = namelist_path
         self.symlink_dest = os.path.join(self._working_dir, "input.nml")
 
         # Create backup and read namelist
         backup_path = os.path.join(self._working_dir, "input.nml.backup")
         shutil.copy2(self.namelist_path, backup_path)
-        _log_progress(f"    Created backup: {backup_path}")
+        _logger.info(f"    Created backup: {backup_path}")
 
         self.content = self.read_namelist()
 
@@ -124,11 +108,11 @@ class Namelist():
                 raise ValueError("Source and destination for symlink are the same.")
             if os.path.islink(self.symlink_dest):
                 os.remove(self.symlink_dest)
-                _log_progress(f"          Symlink '{self.symlink_dest}' removed.")
+                _logger.info(f"          Symlink '{self.symlink_dest}' removed.")
             elif os.path.exists(self.symlink_dest):
                 raise ValueError(f"'{self.symlink_dest}' exists and is not a symlink. Not removing nor continuing execution.")
             os.symlink(namelist_path, self.symlink_dest)
-            _log_progress(f"          Symlink {self.symlink_dest} -> '{namelist_path}' created.")
+            _logger.info(f"          Symlink {self.symlink_dest} -> '{namelist_path}' created.")
         except OSError as e:
             raise OSError(f"Could not create symlink from "
                          f"'{namelist_path}' to '{self.symlink_dest}': {e}")
@@ -138,11 +122,11 @@ class Namelist():
         try:
             if os.path.islink(self.symlink_dest):
                 os.remove(self.symlink_dest)
-                _log_progress(f"          Symlink '{self.symlink_dest}' removed.")
+                _logger.info(f"          Symlink '{self.symlink_dest}' removed.")
             elif os.path.exists(self.symlink_dest):
-                _log_warning(f"'{self.symlink_dest}' exists but is not a symlink. Not removing.")
+                _logger.warning(f"'{self.symlink_dest}' exists but is not a symlink. Not removing.")
             else:
-                _log_progress(f"          No symlink '{self.symlink_dest}' found to remove.")
+                _logger.info(f"          No symlink '{self.symlink_dest}' found to remove.")
         except OSError as e:
             raise OSError(f"Could not remove symlink '{self.symlink_dest}': {e}")
 

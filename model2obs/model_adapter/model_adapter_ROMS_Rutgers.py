@@ -11,22 +11,7 @@ from . import ModelAdapter, ModelAdapterCapabilities
 from ..utils import config as config_utils
 from ..utils import logging_utils
 
-LOGGER = logging.getLogger(__name__)
-
-
-def _log_progress(message: str) -> None:
-    """Emit high-level progress to screen and log."""
-    logging_utils.emit_progress(message, LOGGER)
-
-
-def _log_debug(message: str) -> None:
-    """Emit detailed diagnostics to log only."""
-    logging_utils.emit_debug(message, LOGGER)
-
-
-def _log_warning(message: str) -> None:
-    """Emit warnings to screen and log."""
-    logging_utils.emit_warning(message, LOGGER)
+_logger = get_module_logger(__name__)
 
 class ModelAdapterROMSRutgers(ModelAdapter):
     """Base class for all model normalizations
@@ -88,7 +73,7 @@ class ModelAdapterROMSRutgers(ModelAdapter):
         super().validate_paths(config, run_opts)
 
         # ROMS specific validation
-        _log_progress("  Validating roms model file...")
+        _logger.info("  Validating roms model file...")
         config_utils.check_nc_file(config['roms_filename'], "roms_filename")
 
         return

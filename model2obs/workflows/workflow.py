@@ -9,22 +9,7 @@ from ..utils import logging_utils
 from ..utils import config as config_utils
 from ..model_adapter.registry import create_model_adapter
 
-LOGGER = logging.getLogger(__name__)
-
-
-def _log_progress(message: str) -> None:
-    """Emit high-level progress to screen and log."""
-    logging_utils.emit_progress(message, LOGGER)
-
-
-def _log_debug(message: str) -> None:
-    """Emit detailed diagnostics to log only."""
-    logging_utils.emit_debug(message, LOGGER)
-
-
-def _log_warning(message: str) -> None:
-    """Emit warnings to screen and log."""
-    logging_utils.emit_warning(message, LOGGER)
+_logger = get_module_logger(__name__)
 
 class Workflow(ABC):
     """Base class for all model2obs workflows.
@@ -126,6 +111,6 @@ class Workflow(ABC):
     
     def print_config(self) -> None:
         """Print current configuration."""
-        _log_progress("Configuration:")
+        _logger.info("Configuration:")
         for key, value in self.config.items():
-            _log_progress(f"  {key}: {value}")
+            _logger.info(f"  {key}: {value}")
