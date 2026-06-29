@@ -66,7 +66,6 @@ class WorkflowModelObs(workflow.Workflow):
         self.model_obs_df = None
         self.perfect_model_obs_log_file = "perfect_model_obs.log"
         self._run_logger: Optional[logging.Logger] = None
-        self._logs_folder: str = os.path.dirname(logging_utils.resolve_run_log_path(config))
         if os.path.isfile(self.perfect_model_obs_log_file):
             os.remove(self.perfect_model_obs_log_file)
 
@@ -114,11 +113,11 @@ class WorkflowModelObs(workflow.Workflow):
             force_obs_time = force_obs_time
         )
 
+        self._setup_run_logger(parallel=parallel)
+        
         self.model_adapter.validate_run_options(self.run_opts)
 
         if clear_output:
-            run_log_path = logging_utils.resolve_run_log_path(self.config)
-            logs_folder = os.path.dirname(run_log_path)
             self._logger.info("Clearing all output folders...")
             output_folders = [
                 self.config['parquet_folder'],
@@ -126,7 +125,7 @@ class WorkflowModelObs(workflow.Workflow):
                 self.config['trimmed_obs_folder'],
                 self.config['output_folder'],
                 self.config['netcdf_output_folder'],
-                logs_folder,
+                self._logs_folder,
             ]
             for folder in output_folders:
                 self._logger.info(f"  Clearing folder: {folder}")
@@ -138,8 +137,6 @@ class WorkflowModelObs(workflow.Workflow):
             self._logger.info("  All output folders cleared.")
             self._logger.info("")
 
-        self._setup_run_logger(parallel=parallel)
-        
         if not parquet_only:
             self._logger.info("Starting files processing.")
             files_processed = self.process_files(

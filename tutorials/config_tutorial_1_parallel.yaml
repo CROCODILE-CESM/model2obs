@@ -65,3 +65,10 @@ model_state_variables:
 use_pseudo_depth: true
 
 layer_name: zl
+
+####### LOGGING #######
+# model2obs writes concise progress to screen and detailed diagnostics to a run log.
+# Default (if unset): <output_folder>/model2obs.log
+# Optional override example (full path):
+log_file: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/logs/model2obs.log
+
