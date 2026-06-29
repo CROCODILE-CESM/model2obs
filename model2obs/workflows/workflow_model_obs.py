@@ -71,12 +71,13 @@ class WorkflowModelObs(workflow.Workflow):
 
     def _setup_run_logger(self, parallel: bool) -> None:
         """Initialize per-run file logger for detailed diagnostics."""
-        _, run_log_path, logs_folder = logging_utils.setup_package_logger(
+        _, log_file_path, logs_folder = logging_utils.setup_package_logger(
             self.config, parallel=parallel
         )
         self._logs_folder = logs_folder
+        self._log_file_path = log_file_path
         self._logger = logging_utils.get_module_logger(__name__)
-        self._logger.info(f"Detailed run log: {run_log_path}")
+        self._logger.info(f"Detailed run log: {log_file_path}")
 
     def _validate_config(self) -> None:
         """Validate configuration parameters.
@@ -125,11 +126,13 @@ class WorkflowModelObs(workflow.Workflow):
                 self.config['trimmed_obs_folder'],
                 self.config['output_folder'],
                 self.config['netcdf_output_folder'],
-                self._logs_folder,
             ]
             for folder in output_folders:
                 self._logger.info(f"  Clearing folder: {folder}")
                 config_utils.clear_folder(folder)
+            # pass exception to logs folder to prevent removing log file in use
+            self._logger.info(f"  Clearing folder: {self._logs_folder}")
+            config_utils.clear_folder(self._logs_folder, [self._log_file_path])
             tmp_folder = self.config['tmp_folder']
             self._logger.info(f"  Clearing folder: {tmp_folder}")
             shutil.rmtree(tmp_folder, ignore_errors=True)

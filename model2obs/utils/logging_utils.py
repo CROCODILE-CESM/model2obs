@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any, Dict, Optional, Tuple
+import warnings
 
 def setup_package_logger(config: Dict[str, Any], parallel: bool) -> Tuple[logging.Logger, str, str]:
     """Configure package logger and return logger, run-log path, and logs folder.
@@ -20,6 +21,11 @@ def setup_package_logger(config: Dict[str, Any], parallel: bool) -> Tuple[loggin
         - resolved logs folder path.
     """
     log_file = os.path.expandvars(config["log_file"])
+    if os.path.exists(log_file):
+        warnings.warn(
+            f"log file {log_file} exists: overwriting it!"
+        )
+        
     logs_folder = os.path.dirname(log_file)
     os.makedirs(logs_folder, exist_ok=True)
 
