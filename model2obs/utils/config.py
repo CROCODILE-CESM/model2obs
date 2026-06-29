@@ -133,7 +133,7 @@ def check_or_create_folder(output_folder: str, name: str) -> None:
         except OSError as e:
             raise OSError(f"Could not create {name} '{output_folder}': {e}") from e
 
-def clear_folder(folder_path: str) -> None:
+def clear_folder(folder_path: str, exceptions: List[str] = None) -> None:
     """Clear content at folder_path."""
     import shutil  # pylint: disable=import-outside-toplevel
 
@@ -141,6 +141,8 @@ def clear_folder(folder_path: str) -> None:
 
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
+        if exceptions and (file_path in exceptions):
+            continue #e.g. do not remove log file being used
         try:
             if os.path.isfile(file_path) or os.path.islink(file_path):
                 os.remove(file_path)
