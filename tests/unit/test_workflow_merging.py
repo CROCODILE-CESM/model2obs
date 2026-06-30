@@ -14,6 +14,16 @@ import pytest
 import dask.dataframe as dd
 
 from model2obs.workflows import workflow_model_obs
+from model2obs.utils import logging_utils
+
+
+@pytest.fixture(scope="module", autouse=True)
+def mock_global_emit_info():
+    def mock_emit_info(message, logger=None):
+        print(message)
+
+    with patch.object(logging_utils, 'emit_info', side_effect=mock_emit_info) as mock_emit:
+        yield mock_emit
 
 
 class TestMergePairToParquet:
@@ -34,6 +44,7 @@ class TestMergePairToParquet:
             'parquet_folder': str(tmp_path / "parquet"),
             'input_nml_bck': str(tmp_path / "nml_backup"),
             'trimmed_obs_folder': str(tmp_path / "trimmed"),
+            'log_file': str(tmp_path/ 'model2obs.log')
         }
         return workflow_model_obs.WorkflowModelObs(config)
     
@@ -410,6 +421,8 @@ class TestMergePairToParquet:
     ):
         """obs column is NaN when obs_seq.in has no observation copies (interpolate_only mode)."""
         workflow.config['interpolate_only'] = True
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         model_df = pd.DataFrame({
             'obs_num': [1, 2],
@@ -548,6 +561,9 @@ class TestMergePairToParquet:
     def test_merge_creates_parquet_files(self, mock_read, mock_failed, mock_good, mock_all,
                                         mock_set_df, mock_merge, workflow_with_files, capsys):
         """Test that merge_model_obs_to_parquet creates parquet files."""
+
+        workflow_with_files._logger = Mock()
+        workflow_with_files._logger.info.side_effect = logging_utils.emit_info
         mock_ddf = Mock()
         mock_ddf.repartition.return_value = mock_ddf
         mock_read.return_value = mock_ddf
@@ -595,6 +611,8 @@ class TestMergePairToParquet:
             'input_nml_bck': str(tmp_path / "nml_backup"),
         }
         workflow = workflow_model_obs.WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
         
         mock_ddf = Mock()
         mock_ddf.repartition.return_value = mock_ddf
@@ -626,6 +644,8 @@ class TestMergePairToParquet:
         mock_good.return_value = pd.DataFrame({'a': range(80)})
         mock_failed.return_value = pd.DataFrame({'a': range(20)})
         
+        workflow_with_files._logger = Mock()
+        workflow_with_files._logger.info.side_effect = logging_utils.emit_info
         workflow_with_files.merge_model_obs_to_parquet(trim_obs=False)
         
         captured = capsys.readouterr()
@@ -650,6 +670,8 @@ class TestMergePairToParquet:
         mock_good.return_value = pd.DataFrame({'a': range(8)})
         mock_failed.return_value = pd.DataFrame({'a': range(2)})
         
+        workflow_with_files._logger = Mock()
+        workflow_with_files._logger.info.side_effect = logging_utils.emit_info
         workflow_with_files.merge_model_obs_to_parquet(trim_obs=False)
         
         tmp_folder = Path(workflow_with_files.config['parquet_folder']) / "tmp"
@@ -672,6 +694,8 @@ class TestMergePairToParquet:
         mock_good.return_value = pd.DataFrame({'a': range(8)})
         mock_failed.return_value = pd.DataFrame({'a': range(2)})
         
+        workflow_with_files._logger = Mock()
+        workflow_with_files._logger.info.side_effect = logging_utils.emit_info
         workflow_with_files.merge_model_obs_to_parquet(trim_obs=False)
         
         mock_ddf.repartition.assert_called_once_with(partition_size="300MB")
