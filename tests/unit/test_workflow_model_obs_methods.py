@@ -17,7 +17,7 @@ from datetime import timedelta
 
 from model2obs.workflows.workflow_model_obs import WorkflowModelObs, RunOptions
 from model2obs.model_adapter.model_adapter_MOM6 import ModelAdapterMOM6
-
+from model2obs.utils import logging_utils
 
 @pytest.fixture
 def base_config(tmp_path):
@@ -32,6 +32,7 @@ def base_config(tmp_path):
         'ocean_geometry': str(tmp_path / 'ocean.nc'),
         'perfect_model_obs_dir': str(tmp_path / 'dart'),
         'parquet_folder': str(tmp_path / 'parquet'),
+        'log_file': str(tmp_path/ 'model2obs.log')
     }
 
 
@@ -46,9 +47,26 @@ def roms_rutgers_config(tmp_path):
         'roms_filename': str(tmp_path / 'roms'),
         'perfect_model_obs_dir': str(tmp_path / 'dart'),
         'parquet_folder': str(tmp_path / 'parquet'),
+        'log_file': str(tmp_path/ 'model2obs.log')
     }
 
 
+@pytest.fixture(scope="module", autouse=True)
+def mock_global_emit_info():
+    def mock_emit_info(message, logger=None):
+        print(message)
+
+    with patch.object(logging_utils, 'emit_info', side_effect=mock_emit_info) as mock_emit:
+        yield mock_emit
+
+@pytest.fixture(scope="module", autouse=True)
+def mock_global_emit_warning():
+    def mock_emit_warning(message, logger=None):
+        print(message)
+
+    with patch.object(logging_utils, 'emit_warning', side_effect=mock_emit_warning) as mock_emit:
+        yield mock_emit
+        
 class TestWorkflowModelObsInit:
     """Tests for WorkflowModelObs initialization."""
     
@@ -97,9 +115,11 @@ class TestRunMethod:
                                    base_config, tmp_path, capsys):
         """Test run() clears output folders when clear_output=True.
 
-        Five standard folders are cleared via clear_folder() (parquet, input_nml_bck,
-        trimmed_obs_folder, output_folder, netcdf_output_folder); tmp_folder is
-        wiped via shutil.rmtree so that leftover worker subdirectories are removed.
+        Five standard folders are cleared via clear_folder() (parquet,
+        input_nml_bck, trimmed_obs_folder, output_folder, netcdf_output_folder,
+        log_folder); tmp_folder is wiped via shutil.rmtree so that leftover
+        worker subdirectories are removed. log_folder is built from log_file
+        path
         """
         base_config['input_nml_bck'] = str(tmp_path / 'bck')
         base_config['trimmed_obs_folder'] = str(tmp_path / 'trimmed')
@@ -110,7 +130,7 @@ class TestRunMethod:
 
         workflow.run(clear_output=True, trim_obs=False)
 
-        assert mock_clear.call_count == 5
+        assert mock_clear.call_count == 6
         mock_rmtree.assert_called_once_with(base_config['tmp_folder'], ignore_errors=True)
         captured = capsys.readouterr()
         assert "Clearing all output folders" in captured.out
@@ -238,6 +258,7 @@ class TestProcessFiles:
             'ocean_geometry': 'ocean.nc',
             'perfect_model_obs_dir': str(tmp_path / 'dart'),
             'parquet_folder': str(tmp_path / 'parquet'),
+            'log_file': str(tmp_path/ 'model2obs.log')
         }
 
         model_files = ['model1.nc', 'model2.nc']
@@ -245,9 +266,10 @@ class TestProcessFiles:
         mock_get_files.side_effect = [model_files, obs_files]
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
         workflow._namelist = Mock()
         workflow._namelist.cleanup_namelist_symlink = Mock()
-
+        
         workflow.process_files(no_matching=True, trim_obs=False)
 
         assert mock_process_pair.call_count == 2
@@ -277,39 +299,54 @@ class TestPrintWorkflowConfig:
         workflow = WorkflowModelObs(config)
         workflow._namelist = Mock()
         workflow._namelist.namelist_path = '/path/to/input.nml'
-        
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+
         workflow._print_workflow_config(trim_obs=False)
-        
+
         captured = capsys.readouterr()
         assert "Configuration:" in captured.out
         assert "/path/to/model" in captured.out
+        assert "/path/to/output" in captured.out
         assert "/path/to/obs" in captured.out
         assert "/path/to/dart" in captured.out
+        assert "/path/to/bck" in captured.out
+        assert "/path/to/tmp" in captured.out
     
     def test_print_workflow_config_with_trim_obs(self, tmp_path, capsys):
         """Test _print_workflow_config includes trimmed_obs_folder when trim_obs=True."""
         config = {
             'ocean_model': 'MOM6',
-            'model_files_folder': str(tmp_path),
-            'obs_seq_in_folder': str(tmp_path),
-            'output_folder': str(tmp_path),
+            'model_files_folder': '/path/to/model',
+            'obs_seq_in_folder': '/path/to/obs',
+            'output_folder': '/path/to/output',
             'template_file': 'template.nc',
             'static_file': 'static.nc',
             'ocean_geometry': 'ocean.nc',
-            'perfect_model_obs_dir': str(tmp_path),
-            'parquet_folder': str(tmp_path),
+            'perfect_model_obs_dir': '/path/to/dart',
+            'parquet_folder': '/path/to/parquet',
+            'input_nml_bck': '/path/to/bck',
+            'tmp_folder': '/path/to/tmp',
             'trimmed_obs_folder': '/path/to/trimmed',
-            'tmp_folder': str(tmp_path),
         }
         
         workflow = WorkflowModelObs(config)
         workflow._namelist = Mock()
-        workflow._namelist.namelist_path = 'input.nml'
-        
+        workflow._namelist.namelist_path = '/path/to/input.nml'
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+
         workflow._print_workflow_config(trim_obs=True)
-        
+
         captured = capsys.readouterr()
-        assert "trimmed_obs_folder" in captured.out
+        assert "Configuration:" in captured.out
+        assert "/path/to/model" in captured.out
+        assert "/path/to/output" in captured.out
+        assert "/path/to/obs" in captured.out
+        assert "/path/to/dart" in captured.out
+        assert "/path/to/bck" in captured.out
+        assert "/path/to/tmp" in captured.out
+        assert "/path/to/trimmed" in captured.out
 
 
 class TestValidateWorkflowPaths:
@@ -344,6 +381,8 @@ class TestInitializeModelNamelist:
         mock_namelist_class.return_value = mock_nml
         
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
         workflow._initialize_model_namelist()
         
         assert workflow._namelist == mock_nml
@@ -378,6 +417,8 @@ class TestInitializeModelNamelist:
         mock_validate_obs.return_value = ['FLOAT_TEMPERATURE', 'DRIFTER_TEMPERATURE']
         
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
         workflow._initialize_model_namelist()
         
         captured = capsys.readouterr()
@@ -408,10 +449,13 @@ class TestInitializeModelNamelist:
         mock_validate_obs.side_effect = FileNotFoundError("RST file not found")
         
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+        workflow._logger.warning.side_effect = logging_utils.emit_warning
         workflow._initialize_model_namelist()
         
         captured = capsys.readouterr()
-        assert "Warning: Could not process observation types" in captured.out
+        assert "Could not process observation types" in captured.out
         assert "Continuing with existing obs_kind_nml" in captured.out
 
 
@@ -556,6 +600,7 @@ class TestProcessModelObsPair:
             'trimmed_obs_folder': str(tmp_path / 'trimmed'),
             'input_nml_bck': str(tmp_path / 'bck'),
             'tmp_folder': str(tmp_path / 'tmp'),
+            'log_file': str(tmp_path / 'log_file'),
         }
 
     @patch('subprocess.Popen')
@@ -578,6 +623,9 @@ class TestProcessModelObsPair:
         mock_from_content.return_value = mock_local_nml
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+        workflow._logs_folder = str(tmp_path)
         workflow._base_nml_content = "&model_nml\n/"
 
         workflow._process_model_obs_pair(
@@ -614,6 +662,9 @@ class TestProcessModelObsPair:
         mock_from_content.return_value = mock_local_nml
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+        workflow._logs_folder = str(tmp_path)
         workflow._base_nml_content = "&model_nml\n/"
 
         workflow._process_model_obs_pair(
@@ -648,6 +699,9 @@ class TestProcessModelObsPair:
         mock_from_content.return_value = Mock()
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+        workflow._logs_folder = str(tmp_path)
         workflow._base_nml_content = "&model_nml\n/"
 
         with pytest.raises(RuntimeError, match="perfect_model_obs failed"):
@@ -684,6 +738,9 @@ class TestProcessModelObsPair:
         mock_from_content.side_effect = from_content_side_effect
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+        workflow._logs_folder = str(tmp_path)
         workflow._base_nml_content = "&model_nml\n/"
 
         tmp_folder = tmp_path / 'tmp'
@@ -721,6 +778,9 @@ class TestProcessModelObsPair:
         mock_from_content.side_effect = from_content_side_effect
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+        workflow._logs_folder = str(tmp_path)
         workflow._base_nml_content = "&model_nml\n/"
 
         tmp_folder = tmp_path / 'tmp'
@@ -757,6 +817,9 @@ class TestProcessModelObsPair:
         mock_from_content.return_value = Mock()
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
+        workflow._logs_folder = str(tmp_path) + '/output'
         workflow._base_nml_content = "&model_nml\n/"
 
         workflow._process_model_obs_pair(
@@ -786,6 +849,7 @@ class TestWritePairSummaryLog:
             'ocean_geometry': 'ocean.nc',
             'perfect_model_obs_dir': str(tmp_path),
             'parquet_folder': str(tmp_path),
+            'log_file': str(tmp_path/ 'model2obs.log'),
             'time_window': {'days': 1, 'seconds': 0},
         })
 
@@ -812,12 +876,18 @@ class TestWritePairSummaryLog:
     def test_log_file_created(self, tmp_path):
         """Log file is written to output_folder/pair_summary_NNNN.log."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
         assert (tmp_path / "output" / "pair_summary_0003.log").exists()
 
     def test_log_contains_model_file(self, tmp_path):
         """Log contains the submitted NC file path."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
         content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
         assert "model_tmp.nc" in content
@@ -825,6 +895,9 @@ class TestWritePairSummaryLog:
     def test_log_contains_original_model_file_when_different(self, tmp_path):
         """Log records the original NC file when it differs from the submitted one."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
         content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
         assert "Original NC file" in content
@@ -833,6 +906,9 @@ class TestWritePairSummaryLog:
     def test_log_omits_original_model_file_when_same(self, tmp_path):
         """Log omits the original NC file line when it is the same as the submitted one."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         kwargs = self._common_kwargs(tmp_path)
         kwargs["original_model_file"] = kwargs["model_in_file"]  # same file
         wf._write_pair_summary_log(**kwargs)
@@ -842,6 +918,9 @@ class TestWritePairSummaryLog:
     def test_log_contains_time_used(self, tmp_path):
         """Log contains a human-readable time and its source label."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
         content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
         assert "Time used" in content
@@ -856,6 +935,9 @@ class TestWritePairSummaryLog:
           window end   = 2019-01-16T00:00:00
         """
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
         content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
         assert "Time window" in content
@@ -868,6 +950,9 @@ class TestWritePairSummaryLog:
     def test_log_contains_obs_counts(self, tmp_path):
         """Log records both submitted count and original pre-trim count."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
         content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
         assert "150" in content   # submitted
@@ -876,6 +961,9 @@ class TestWritePairSummaryLog:
     def test_log_contains_interpolation_counts(self, tmp_path):
         """Log records successful and failed interpolation counts with percentages."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
         content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
         assert "120" in content    # n_success
@@ -885,6 +973,9 @@ class TestWritePairSummaryLog:
     def test_log_dart_success_label(self, tmp_path):
         """Log writes 'success' when DART exit code is 0."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         wf._write_pair_summary_log(**self._common_kwargs(tmp_path))
         content = (tmp_path / "output" / "pair_summary_0003.log").read_text()
         assert "success" in content
@@ -892,6 +983,9 @@ class TestWritePairSummaryLog:
     def test_log_dart_failed_label(self, tmp_path):
         """Log writes 'FAILED' when DART exit code is non-zero."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         kwargs = self._common_kwargs(tmp_path)
         kwargs["dart_exit_code"] = 1
         wf._write_pair_summary_log(**kwargs)
@@ -901,6 +995,9 @@ class TestWritePairSummaryLog:
     def test_log_missing_qc_shows_fallback(self, tmp_path):
         """Log writes a fallback message when interpolation counts are None."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         kwargs = self._common_kwargs(tmp_path)
         kwargs["n_success"] = None
         kwargs["n_fail"] = None
@@ -911,16 +1008,22 @@ class TestWritePairSummaryLog:
     def test_log_write_failure_is_non_fatal(self, tmp_path, capsys):
         """Log write failure prints a warning but does not raise."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logger.warning.side_effect = logging_utils.emit_warning
         kwargs = self._common_kwargs(tmp_path)
         # Point output_folder to a non-existent path to force write failure
         wf.config["output_folder"] = str(tmp_path / "nonexistent_dir")
         wf._write_pair_summary_log(**kwargs)  # must not raise
         captured = capsys.readouterr()
-        assert "WARNING" in captured.out
+        assert "could not write pair" in captured.out
 
     def test_log_written_on_dart_failure(self, tmp_path):
         """Summary log is present even when DART exit code is non-zero."""
         wf = self._make_workflow(tmp_path)
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
+        wf._logs_folder = str(tmp_path) + '/output'
         kwargs = self._common_kwargs(tmp_path)
         kwargs["dart_exit_code"] = 1
         kwargs["n_success"] = None
@@ -1021,6 +1124,8 @@ class TestProcessModelFileWorker:
 
         workflow = WorkflowModelObs(config)
         workflow._base_nml_content = "&model_nml\n/"
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         with patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence', return_value=mock_obs):
             count = workflow._process_model_file_worker(
@@ -1054,6 +1159,8 @@ class TestProcessModelFileWorker:
 
         workflow = WorkflowModelObs(config)
         workflow._base_nml_content = "&model_nml\n/"
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         with patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence', return_value=mock_obs):
             count = workflow._process_model_file_worker(
@@ -1084,6 +1191,8 @@ class TestProcessModelFileWorker:
 
         workflow = WorkflowModelObs(config)
         workflow._base_nml_content = "&model_nml\n/"
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         # Pre-populate the shared list with the obs file — simulates it being
         # matched by a previous model file in _process_with_time_matching.
@@ -1129,6 +1238,8 @@ class TestProcessModelFileWorker:
 
         workflow = WorkflowModelObs(config)
         workflow._base_nml_content = "&model_nml\n/"
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         with patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence', return_value=mock_obs):
             count = workflow._process_model_file_worker(
@@ -1166,6 +1277,8 @@ class TestProcessModelFileWorker:
 
         workflow = WorkflowModelObs(config)
         workflow._base_nml_content = "&model_nml\n/"
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         # obsq.ObsSequence must NOT be called; time-matching already done
         with patch('model2obs.workflows.workflow_model_obs.obsq.ObsSequence') as mock_obsq:
@@ -1193,6 +1306,8 @@ class TestProcessModelFileWorker:
 
         workflow = WorkflowModelObs(config)
         workflow._base_nml_content = "&model_nml\n/"
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         count = workflow._process_model_file_worker(
             model_file, [], base_counter=0,
@@ -1261,6 +1376,8 @@ class TestPrecomputeTimeMatching:
 
         wf = WorkflowModelObs(config)
         wf._base_nml_content = "&model_nml\n/"
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
 
         with patch(
             'model2obs.workflows.workflow_model_obs.obsq.ObsSequence',
@@ -1293,6 +1410,8 @@ class TestPrecomputeTimeMatching:
 
         wf = WorkflowModelObs(config)
         wf._base_nml_content = "&model_nml\n/"
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
 
         with patch(
             'model2obs.workflows.workflow_model_obs.obsq.ObsSequence',
@@ -1321,6 +1440,8 @@ class TestPrecomputeTimeMatching:
 
         wf = WorkflowModelObs(config)
         wf._base_nml_content = "&model_nml\n/"
+        wf._logger = Mock()
+        wf._logger.info.side_effect = logging_utils.emit_info
 
         with patch(
             'model2obs.workflows.workflow_model_obs.obsq.ObsSequence',
@@ -1367,6 +1488,8 @@ class TestParallelDispatch:
         """Test parallel=True with no_matching dispatches all pairs via ThreadPoolExecutor."""
         workflow, _ = self._base_workflow(tmp_path)
         workflow._namelist = Mock()
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         model_files = ['model1.nc', 'model2.nc', 'model3.nc']
         obs_files = ['obs1.in', 'obs2.in', 'obs3.in']
@@ -1392,6 +1515,8 @@ class TestParallelDispatch:
         """
         workflow, config = self._base_workflow(tmp_path)
         workflow._namelist = Mock()
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         model_files = ['model_0.nc', 'model_1.nc']
         obs_files = ['obs1.in', 'obs2.in']
@@ -1432,6 +1557,8 @@ class TestParallelDispatch:
         """
         workflow, _ = self._base_workflow(tmp_path)
         workflow._namelist = Mock()
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         model_files = ['model1.nc', 'model2.nc']
         obs_files = ['obs1.in', 'obs2.in']
@@ -1454,6 +1581,8 @@ class TestParallelDispatch:
         """Test _validate_model_file_timestamps is called even in serial mode."""
         workflow, _ = self._base_workflow(tmp_path)
         workflow._namelist = Mock()
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         model_files = ['model1.nc']
         obs_files = ['obs1.in']
@@ -1478,6 +1607,8 @@ class TestParallelDispatch:
         """Test that trim_obs=True calls get_model_boundaries before processing."""
         workflow, _ = self._base_workflow(tmp_path)
         workflow._namelist = Mock()
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
 
         model_files = ['model1.nc']
         obs_files = ['obs1.in']
@@ -1507,6 +1638,7 @@ def _base_config(tmp_path: Path) -> dict:
         'ocean_geometry': str(tmp_path / 'ocean.nc'),
         'perfect_model_obs_dir': str(tmp_path / 'dart'),
         'parquet_folder': str(tmp_path / 'parquet'),
+        'log_file': str(tmp_path / 'log_file'),
     }
 
 
@@ -1632,6 +1764,8 @@ class TestWritePairNetcdf:
         (tmp_path / 'netcdf').mkdir()
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
         merged = _make_merged_df(pd.Timestamp('2020-06-01 12:00:00'))
         workflow._write_pair_netcdf(merged, pair_index=0)
 
@@ -1645,6 +1779,8 @@ class TestWritePairNetcdf:
         (tmp_path / 'netcdf').mkdir()
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
         merged = _make_merged_df(pd.Timestamp('2020-06-01 12:00:00'))
         workflow._write_pair_netcdf(merged, pair_index=0)
 
@@ -1663,6 +1799,8 @@ class TestWritePairNetcdf:
         (tmp_path / 'netcdf').mkdir()
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
         merged = _make_merged_df(pd.Timestamp('2020-06-01 12:00:00'))
 
         with patch('model2obs.io.netcdf_output.write_interpolated_to_netcdf',
@@ -1677,6 +1815,8 @@ class TestWritePairNetcdf:
         (tmp_path / 'netcdf').mkdir()
 
         workflow = WorkflowModelObs(config)
+        workflow._logger = Mock()
+        workflow._logger.info.side_effect = logging_utils.emit_info
         incomplete = pd.DataFrame({'longitude': [1.0], 'latitude': [2.0]})
 
         workflow._write_pair_netcdf(incomplete, pair_index=3)
