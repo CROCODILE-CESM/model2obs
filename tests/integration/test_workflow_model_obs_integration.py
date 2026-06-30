@@ -6,6 +6,7 @@ used directly as it's available in the conda environment.
 """
 
 import os
+import glob
 import pytest
 from pathlib import Path
 from unittest.mock import patch, Mock, call
@@ -13,6 +14,16 @@ import shutil
 import xarray as xr
 import numpy as np
 import pandas as pd
+
+from model2obs.utils import logging_utils
+
+@pytest.fixture(scope="module", autouse=True)
+def mock_global_emit_info():
+    def mock_emit_info(message, logger=None):
+        print(message)
+
+    with patch.object(logging_utils, 'emit_info', side_effect=mock_emit_info) as mock_emit:
+        yield mock_emit
 
 
 @pytest.fixture
@@ -39,6 +50,7 @@ def workflow_config(tmp_path):
         template = tmp_path / "template.nc"
         static = tmp_path / "static.nc"
         geometry = tmp_path / "ocean_geometry.nc"
+        log_file = tmp_path / 'model2obs.log'
         
         # Create minimal NetCDF files using xarray
         ds_template = xr.Dataset(
@@ -88,6 +100,7 @@ def workflow_config(tmp_path):
             'trimmed_obs_folder': str(trimmed_obs),
             'input_nml_bck': str(nml_bck),
             'tmp_folder': str(tmp_path / 'tmp'),
+            'log_file' : str(log_file),
             'obs_def_file': str(obs_def_file),
             'obs_types': ['FLOAT_TEMPERATURE'],
             'time_window': {
@@ -162,22 +175,22 @@ class TestWorkflowModelObsInitialization:
         from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
         # Create old log file
-        log_file = Path("perfect_model_obs.log")
+        pmo_log_file = Path("perfect_model_obs.log")
         original_cwd = os.getcwd()
         
         try:
             os.chdir(tmp_path)
-            log_file.touch()
-            assert log_file.exists()
+            pmo_log_file.touch()
+            assert pmo_log_file.exists()
             
             workflow = WorkflowModelObs(workflow_config)
             
             # Log file should be removed during init
-            assert not log_file.exists()
+            assert not pmo_log_file.exists()
         finally:
             os.chdir(original_cwd)
-            if log_file.exists():
-                log_file.unlink()
+            if pmo_log_file.exists():
+                pmo_log_file.unlink()
 
 
 class TestWorkflowModelObsProcessFiles:
@@ -214,6 +227,9 @@ class TestWorkflowModelObsProcessFiles:
         # Skip trimming for simplicity
         with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             workflow = WorkflowModelObs(workflow_config)
+            workflow._logger = Mock()
+            workflow._logger.info.side_effect = logging_utils.emit_info
+            workflow._logs_folder = str(tmp_path)
             
             # Run workflow (without parquet conversion)
             workflow.process_files(trim_obs=False, no_matching=True)
@@ -236,6 +252,8 @@ class TestWorkflowModelObsProcessFiles:
         
         with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             workflow = WorkflowModelObs(workflow_config)
+            workflow._logger = Mock()
+            workflow._logger.info.side_effect = logging_utils.emit_info
             
             # Process with time matching (default)
             # Note: time matching may result in 0 matches if times don't align
@@ -246,7 +264,7 @@ class TestWorkflowModelObsProcessFiles:
             assert True
     
     @patch('subprocess.Popen')
-    def test_process_files_subprocess_failure(self, mock_popen, workflow_config, mock_obs_seq_files):
+    def test_process_files_subprocess_failure(self, mock_popen, workflow_config, mock_obs_seq_files, tmp_path):
         """Test handling of perfect_model_obs subprocess failure."""
         from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
@@ -261,6 +279,9 @@ class TestWorkflowModelObsProcessFiles:
         with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             with patch('subprocess.run', return_value=Mock(returncode=0)):
                 workflow = WorkflowModelObs(workflow_config)
+                workflow._logger = Mock()
+                workflow._logger.info.side_effect = logging_utils.emit_info
+                workflow._logs_folder = str(tmp_path)
                 
                 # Should raise error on subprocess failure
                 with pytest.raises(RuntimeError, match="perfect_model_obs failed"):
@@ -306,7 +327,7 @@ class TestWorkflowModelObsRunMethod:
     
     @patch('subprocess.Popen')
     @patch('subprocess.run')
-    def test_run_complete_workflow(self, mock_run, mock_popen, workflow_config, mock_obs_seq_files):
+    def test_run_complete_workflow(self, mock_run, mock_popen, workflow_config, mock_obs_seq_files, tmp_path):
         """Test running the complete workflow."""
         from model2obs.workflows.workflow_model_obs import WorkflowModelObs
         
@@ -386,6 +407,8 @@ class TestWorkflowModelObsNamelistOperations:
         
         try:
             workflow = WorkflowModelObs(workflow_config)
+            workflow._logger = Mock()
+            workflow._logger.info.side_effect = logging_utils.emit_info
             
             # Should initialize namelist without error
             workflow._initialize_model_namelist()
@@ -444,7 +467,7 @@ class TestWorkflowModelObsParallelProcessing:
     @patch('subprocess.Popen')
     @patch('subprocess.run')
     def test_parallel_no_matching_same_call_count(
-        self, mock_run, mock_popen, workflow_config, mock_obs_seq_files
+            self, mock_run, mock_popen, workflow_config, mock_obs_seq_files, tmp_path
     ):
         """Parallel mode invokes perfect_model_obs the same number of times as serial."""
         from model2obs.workflows.workflow_model_obs import WorkflowModelObs
@@ -455,7 +478,10 @@ class TestWorkflowModelObsParallelProcessing:
         mock_proc.wait.return_value = None
         mock_popen.return_value = mock_proc
 
-        WorkflowModelObs(workflow_config).process_files(
+        workflow = WorkflowModelObs(workflow_config)
+        workflow._logger = Mock()
+        workflow._logs_folder = str(tmp_path)
+        workflow.process_files(
             trim_obs=False, no_matching=True, parallel=False
         )
         serial_count = mock_popen.call_count
@@ -468,7 +494,10 @@ class TestWorkflowModelObsParallelProcessing:
 
         mock_popen.reset_mock()
 
-        WorkflowModelObs(workflow_config).process_files(
+        workflow = WorkflowModelObs(workflow_config)
+        workflow._logger = Mock()
+        workflow._logs_folder = str(tmp_path)
+        workflow.process_files(
             trim_obs=False, no_matching=True, parallel=True
         )
         parallel_count = mock_popen.call_count
@@ -478,7 +507,7 @@ class TestWorkflowModelObsParallelProcessing:
     @patch('subprocess.Popen')
     @patch('subprocess.run')
     def test_parallel_no_matching_worker_exception_propagates(
-        self, mock_run, mock_popen, workflow_config, mock_obs_seq_files
+            self, mock_run, mock_popen, workflow_config, mock_obs_seq_files, tmp_path
     ):
         """A subprocess failure inside a parallel worker raises RuntimeError at the call site.
 
@@ -496,6 +525,8 @@ class TestWorkflowModelObsParallelProcessing:
         mock_popen.return_value = mock_proc
 
         workflow = WorkflowModelObs(workflow_config)
+        workflow._logger = Mock()
+        workflow._logs_folder = str(tmp_path)
 
         with pytest.raises(RuntimeError, match="perfect_model_obs failed"):
             workflow.process_files(trim_obs=False, no_matching=True, parallel=True)
@@ -503,7 +534,7 @@ class TestWorkflowModelObsParallelProcessing:
     @patch('subprocess.Popen')
     @patch('subprocess.run')
     def test_parallel_per_pair_log_files_created(
-        self, mock_run, mock_popen, workflow_config, mock_obs_seq_files
+            self, mock_run, mock_popen, workflow_config, mock_obs_seq_files
     ):
         """All N log files are present in the output folder after a parallel run.
 
@@ -519,11 +550,11 @@ class TestWorkflowModelObsParallelProcessing:
         mock_popen.return_value = mock_proc
 
         workflow = WorkflowModelObs(workflow_config)
+        workflow._setup_run_logger(parallel=True)
         workflow.process_files(trim_obs=False, no_matching=True, parallel=True)
 
-        output_folder = Path(workflow_config['output_folder'])
-        log_files = list(output_folder.glob("perfect_model_obs_*.log"))
-        assert len(log_files) == 3, f"Expected 3 per-pair log files, found {len(log_files)}"
+        pmo_log_files = glob.glob(workflow._logs_folder + "/perfect_model_obs_*.log")
+        assert len(pmo_log_files) == 3, f"Expected 3 per-pair log files, found {len(pmo_log_files)}"
 
     @patch('subprocess.Popen')
     @patch('subprocess.run')
@@ -555,13 +586,21 @@ class TestWorkflowModelObsParallelProcessing:
 
         with patch.object(WorkflowModelObs, '_process_model_obs_pair',
                           side_effect=capture(serial_pairs)):
-            WorkflowModelObs(workflow_config).process_files(
+
+            workflow = WorkflowModelObs(workflow_config)
+            workflow._logger = Mock()
+            
+            workflow.process_files(
                 trim_obs=False, no_matching=True, parallel=False
             )
 
         with patch.object(WorkflowModelObs, '_process_model_obs_pair',
                           side_effect=capture(parallel_pairs)):
-            WorkflowModelObs(workflow_config).process_files(
+
+            workflow = WorkflowModelObs(workflow_config)
+            workflow._logger = Mock()
+            
+            workflow.process_files(
                 trim_obs=False, no_matching=True, parallel=True
             )
 
