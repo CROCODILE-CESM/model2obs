@@ -422,7 +422,6 @@ class TestMergePairToParquet:
         """obs column is NaN when obs_seq.in has no observation copies (interpolate_only mode)."""
         workflow.config['interpolate_only'] = True
         workflow._logger = Mock()
-        workflow._logger.info.side_effect = logging_utils.emit_info
 
         model_df = pd.DataFrame({
             'obs_num': [1, 2],
@@ -612,7 +611,6 @@ class TestMergePairToParquet:
         }
         workflow = workflow_model_obs.WorkflowModelObs(config)
         workflow._logger = Mock()
-        workflow._logger.info.side_effect = logging_utils.emit_info
         
         mock_ddf = Mock()
         mock_ddf.repartition.return_value = mock_ddf
@@ -671,7 +669,6 @@ class TestMergePairToParquet:
         mock_failed.return_value = pd.DataFrame({'a': range(2)})
         
         workflow_with_files._logger = Mock()
-        workflow_with_files._logger.info.side_effect = logging_utils.emit_info
         workflow_with_files.merge_model_obs_to_parquet(trim_obs=False)
         
         tmp_folder = Path(workflow_with_files.config['parquet_folder']) / "tmp"
@@ -695,7 +692,6 @@ class TestMergePairToParquet:
         mock_failed.return_value = pd.DataFrame({'a': range(2)})
         
         workflow_with_files._logger = Mock()
-        workflow_with_files._logger.info.side_effect = logging_utils.emit_info
         workflow_with_files.merge_model_obs_to_parquet(trim_obs=False)
         
         mock_ddf.repartition.assert_called_once_with(partition_size="300MB")

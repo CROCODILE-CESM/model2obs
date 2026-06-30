@@ -17,15 +17,6 @@ import pandas as pd
 
 from model2obs.utils import logging_utils
 
-@pytest.fixture(scope="module", autouse=True)
-def mock_global_emit_info():
-    def mock_emit_info(message, logger=None):
-        print(message)
-
-    with patch.object(logging_utils, 'emit_info', side_effect=mock_emit_info) as mock_emit:
-        yield mock_emit
-
-
 @pytest.fixture
 def workflow_config(tmp_path):
     """Create a complete workflow configuration for testing."""
@@ -228,7 +219,6 @@ class TestWorkflowModelObsProcessFiles:
         with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             workflow = WorkflowModelObs(workflow_config)
             workflow._logger = Mock()
-            workflow._logger.info.side_effect = logging_utils.emit_info
             workflow._logs_folder = str(tmp_path)
             
             # Run workflow (without parquet conversion)
@@ -253,7 +243,6 @@ class TestWorkflowModelObsProcessFiles:
         with patch('model2obs.io.obs_seq_tools.trim_obs_seq_in'):
             workflow = WorkflowModelObs(workflow_config)
             workflow._logger = Mock()
-            workflow._logger.info.side_effect = logging_utils.emit_info
             
             # Process with time matching (default)
             # Note: time matching may result in 0 matches if times don't align
@@ -280,7 +269,6 @@ class TestWorkflowModelObsProcessFiles:
             with patch('subprocess.run', return_value=Mock(returncode=0)):
                 workflow = WorkflowModelObs(workflow_config)
                 workflow._logger = Mock()
-                workflow._logger.info.side_effect = logging_utils.emit_info
                 workflow._logs_folder = str(tmp_path)
                 
                 # Should raise error on subprocess failure
@@ -408,7 +396,6 @@ class TestWorkflowModelObsNamelistOperations:
         try:
             workflow = WorkflowModelObs(workflow_config)
             workflow._logger = Mock()
-            workflow._logger.info.side_effect = logging_utils.emit_info
             
             # Should initialize namelist without error
             workflow._initialize_model_namelist()
