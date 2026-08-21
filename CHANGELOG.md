@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- Use the shared NCAR workshop data for tutorial installation on Derecho and
+  Casper, with a warning and web-download fallback when it is unavailable
 - NetCDF output support for interpolated model-observation comparison data
   - Optional CF-compliant NetCDF4 export via `interpolate_only: true` config flag
   - One NetCDF file per model-obs pair with 4D gridded structure (time, depth, latitude, longitude)
@@ -49,4 +51,3 @@ All notable changes to this project will be documented in this file.
   - interactive maps and plots to visualize model-obs performance
 - Tested on NCAR HPC machines Derecho and Casper
 - Requires existing installation of DART on the machine
-
