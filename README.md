@@ -85,6 +85,11 @@ To also download tutorial datasets from Zenodo:
 ./install.sh --tutorial
 ```
 
+On Derecho or Casper, `--tutorial` automatically copies CrocoLake and the
+tutorial data from `/glade/work/emilanese/workshop_2026_data` instead of
+downloading them. If that shared data is unavailable, the installer warns and
+falls back to the web downloads.
+
 #### 4. Activate the Environment
 
 ```bash
