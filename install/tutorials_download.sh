@@ -8,7 +8,7 @@ is_ncar_hpc_host() {
     hostname_value=$(hostname -s 2>/dev/null || hostname)
     hostname_value=$(printf '%s' "$hostname_value" | tr '[:upper:]' '[:lower:]')
     case "$hostname_value" in
-        derecho|derecho-*|*.derecho|*.derecho.*|casper|casper-*|*.casper|*.casper.*)
+        dec*|derecho*|crlogin*|crht*)
             return 0
             ;;
         *)
