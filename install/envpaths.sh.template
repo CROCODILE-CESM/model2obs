@@ -28,4 +28,4 @@ export PYTHONPATH="$CROCOLAKE_OBS_CONV_PATH:\$PYTHONPATH"
 export MODEL2OBS_PATH=$(dirname "$PWD")/
 
 export CROCOLAKE_PATH=$(dirname "$PWD")/CrocoLake/
-export TUTORIAL_DATA_PATH=$(dirname "$PWD")/2025_Crocodile_tutorial/
+export TUTORIAL_DATA_PATH=$(dirname "$PWD")/tutorial_data/
