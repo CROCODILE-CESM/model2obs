@@ -85,10 +85,11 @@ To also download tutorial datasets from Zenodo:
 ./install.sh --tutorial
 ```
 
-On Derecho or Casper, `--tutorial` automatically copies CrocoLake and the
-tutorial data from `/glade/work/emilanese/workshop_2026_data` instead of
-downloading them. If that shared data is unavailable, the installer warns and
-falls back to the web downloads.
+On Derecho or Casper, use `./install_NCAR.sh --tutorial` instead: it reads
+CrocoLake directly from
+`/glade/campaign/cgd/oce/projects/CROCODILE/workshops/2026/CrocoLake` and copies
+the tutorial data from the same campaign root. Set `NCAR_SHARED_DATA_ROOT` if
+you need to override the campaign root.
 
 #### 4. Activate the Environment
 

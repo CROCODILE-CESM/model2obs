@@ -27,5 +27,6 @@ export PYTHONPATH="$CROCOLAKE_OBS_CONV_PATH:\$PYTHONPATH"
 
 export MODEL2OBS_PATH=$(dirname "$PWD")/
 
-export CROCOLAKE_PATH=$(dirname "$PWD")/CrocoLake/
-export TUTORIAL_DATA_PATH=$(dirname "$PWD")/2025_Crocodile_tutorial/
+# CROCOLAKE_PATH points at the dataset directory that download_crocolake creates
+export CROCOLAKE_PATH=$(dirname "$PWD")/CrocoLake/0007_PHY_CROCOLAKE-QC-MERGED/
+export TUTORIAL_DATA_PATH=$(dirname "$PWD")/tutorial_data/

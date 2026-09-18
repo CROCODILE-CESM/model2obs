@@ -11,6 +11,9 @@ for arg in "$@"; do
 done
 
 ## create conda environment with name set in envpaths_NCAR.sh
+# clear derived paths that an activated model2obs conda env may already export,
+# so they are recomputed here rather than inherited from a previous install
+unset CROCOLAKE_PATH TUTORIAL_DATA_PATH MODEL2OBS_PATH CROCOLAKE_OBS_CONV_PATH
 source ./envpaths_NCAR.sh
 mamba env create --name "$CONDA_ENV_NAME" -f ../environment.yml -y
 CONDA_ENV_PATH=$(conda env list | awk -v env="$CONDA_ENV_NAME" '$1 == env { print $NF }')
@@ -32,6 +35,7 @@ export CONDA_ENV_NAME="$CONDA_ENV_NAME"
 export CROCOLAKE_OBS_CONV_PATH="$CROCOLAKE_OBS_CONV_PATH"
 export PYTHONPATH="$PYTHONPATH"
 export MODEL2OBS_PATH="$MODEL2OBS_PATH"
+export NCAR_SHARED_DATA_ROOT="$NCAR_SHARED_DATA_ROOT"
 export CROCOLAKE_PATH="$CROCOLAKE_PATH"
 export TUTORIAL_DATA_PATH="$TUTORIAL_DATA_PATH"
 EOF
@@ -40,7 +44,5 @@ echo "source \"${CONDA_SCRIPTS_PATH}envpaths.sh\"" > $CONDA_ENV_PATH/etc/conda/a
 chmod +x $CONDA_ENV_PATH/etc/conda/activate.d/load_paths.sh
 
 if [[ "$TUTORIAL" -eq 1 ]]; then
-    conda run -n "$CONDA_ENV_NAME" --no-capture-output ./tutorials_download.sh
-    RELATIVE_TUTORIAL_PATH=$(realpath --relative-to="../" "$TUTORIAL_DATA_PATH")
-    sed -i "1s|^|${RELATIVE_TUTORIAL_PATH}\n|" ../.gitignore
+    ./tutorials_setup_NCAR.sh
 fi
