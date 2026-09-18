@@ -32,6 +32,7 @@ export CONDA_ENV_NAME="$CONDA_ENV_NAME"
 export CROCOLAKE_OBS_CONV_PATH="$CROCOLAKE_OBS_CONV_PATH"
 export PYTHONPATH="$PYTHONPATH"
 export MODEL2OBS_PATH="$MODEL2OBS_PATH"
+export NCAR_SHARED_DATA_ROOT="$NCAR_SHARED_DATA_ROOT"
 export CROCOLAKE_PATH="$CROCOLAKE_PATH"
 export TUTORIAL_DATA_PATH="$TUTORIAL_DATA_PATH"
 EOF
@@ -40,5 +41,5 @@ echo "source \"${CONDA_SCRIPTS_PATH}envpaths.sh\"" > $CONDA_ENV_PATH/etc/conda/a
 chmod +x $CONDA_ENV_PATH/etc/conda/activate.d/load_paths.sh
 
 if [[ "$TUTORIAL" -eq 1 ]]; then
-    conda run -n "$CONDA_ENV_NAME" --no-capture-output ./tutorials_download.sh
+    ./tutorials_setup_NCAR.sh
 fi
