@@ -25,6 +25,6 @@ dependencies:
   - pytest
   - pip<=25.2
   - pip:
-      - git+https://github.com/NCAR/pyDARTdiags.git@026671693b4240e15f3651f5414af2283cb471a7
+      - git+https://github.com/NCAR/pyDARTdiags.git@22ddd3b1d227a19a17841e59a0d88e6f2304da67
       - -e .[test]
 
