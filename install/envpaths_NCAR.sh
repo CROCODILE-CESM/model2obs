@@ -14,8 +14,10 @@ export PYTHONPATH="$CROCOLAKE_OBS_CONV_PATH:\$PYTHONPATH"
 
 export MODEL2OBS_PATH=$(dirname "$PWD")/
 
-# CrocoLake is read-only and stays on campaign storage: it is never copied
-export CROCOLAKE_PATH="${CROCOLAKE_PATH:-${NCAR_SHARED_DATA_ROOT%/}/CrocoLake/}"
+# CrocoLake is read-only and stays on campaign storage: it is never copied.
+# Derived unconditionally, so a stale value exported by an activated model2obs
+# conda env cannot override it: use NCAR_SHARED_DATA_ROOT to relocate the data.
+export CROCOLAKE_PATH="${NCAR_SHARED_DATA_ROOT%/}/CrocoLake/"
 
 # Tutorial data is read and written, so it lives in the user's clone
 export TUTORIAL_DATA_PATH=$(dirname "$PWD")/tutorial_data/

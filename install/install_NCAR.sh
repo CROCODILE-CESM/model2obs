@@ -11,6 +11,9 @@ for arg in "$@"; do
 done
 
 ## create conda environment with name set in envpaths_NCAR.sh
+# clear derived paths that an activated model2obs conda env may already export,
+# so they are recomputed here rather than inherited from a previous install
+unset CROCOLAKE_PATH TUTORIAL_DATA_PATH MODEL2OBS_PATH CROCOLAKE_OBS_CONV_PATH
 source ./envpaths_NCAR.sh
 mamba env create --name "$CONDA_ENV_NAME" -f ../environment.yml -y
 CONDA_ENV_PATH=$(conda env list | awk -v env="$CONDA_ENV_NAME" '$1 == env { print $NF }')
