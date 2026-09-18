@@ -7,10 +7,11 @@
 # Structure follows config_templates/config_template_MOM6.yaml.
 #
 # NOTE: Paths below are relative to $TUTORIAL_DATA_PATH, the tutorial data folder
-# set by install/envpaths*.sh and populated by install/tutorials_download.sh (on
-# NCAR HPC systems this is copied from the shared workshop dataset, elsewhere it
-# is downloaded from Zenodo). If running elsewhere, either export
-# TUTORIAL_DATA_PATH to your own copy of the data or edit the paths below.
+# set by install/envpaths*.sh. On NCAR HPC systems install_NCAR.sh populates it
+# from the shared campaign dataset via install/tutorials_setup_NCAR.sh; elsewhere
+# install.sh downloads it from Zenodo via install/tutorials_download.sh. If
+# running somewhere else, either export TUTORIAL_DATA_PATH to your own copy of
+# the data or edit the paths below.
 
 # Ocean model to use (required)
 # Supported values: MOM6, ROMS_Rutgers

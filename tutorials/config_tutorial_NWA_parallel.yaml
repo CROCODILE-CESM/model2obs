@@ -1,13 +1,18 @@
 # ==========================================
-# model2obs Configuration for Tutorial 1
+# model2obs Configuration for the North West Atlantic tutorial (parallel)
 # ==========================================
-# This configuration file contains paths and settings for Tutorial 1,
-# which demonstrates model-observation comparison using MOM6 and World Ocean Database.
+# Model-observation comparison between a MOM6 NWA12 run (4 daily snapshots,
+# 2010-05-01 to 2010-05-04, split across NWA12_demo_01_p1.nc and
+# NWA12_demo_01_p2.nc) and CrocoLake observations already in obs_seq format.
+# Run with parallel=True, one worker thread per model file.
+# Structure follows config_templates/config_template_MOM6.yaml.
 #
-# See config_template.yaml for more info about each field.
-# 
-# NOTE: Paths below are pre-configured for NCAR HPC systems (Casper/Derecho).
-# If running elsewhere, you will need to adjust these paths to your local setup.
+# NOTE: Paths below are relative to $TUTORIAL_DATA_PATH, the tutorial data folder
+# set by install/envpaths*.sh. On NCAR HPC systems install_NCAR.sh populates it
+# from the shared campaign dataset via install/tutorials_setup_NCAR.sh; elsewhere
+# install.sh downloads it from Zenodo via install/tutorials_download.sh. If
+# running somewhere else, either export TUTORIAL_DATA_PATH to your own copy of
+# the data or edit the paths below.
 
 # Ocean model to use (required)
 # Supported values: MOM6, ROMS_Rutgers
@@ -15,23 +20,23 @@ ocean_model: MOM6
 
 ####### INPUT FILES #######
 # Directory containing model .nc files to process
-model_files_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6_par/
+model_files_folder: $TUTORIAL_DATA_PATH/tutorial_NW_atlantic_parallel/in_mom6/
 
 # Model configuration files (must be .nc files)
-template_file: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6/NWA12_demo_01.nc
-static_file: $TUTORIAL_DATA_PATH/tutorial_1/in_mom6_ref/NWA12_demo_static.nc
-ocean_geometry:  $TUTORIAL_DATA_PATH/tutorial_1/in_mom6_ref/NWA12_demo_ocean_geometry.nc
+template_file: $TUTORIAL_DATA_PATH/tutorial_NW_atlantic_parallel/in_mom6/NWA12_demo_01_p1.nc
+static_file: $TUTORIAL_DATA_PATH/tutorial_NW_atlantic_parallel/in_mom6_ref/NWA12_demo_static.nc
+ocean_geometry:  $TUTORIAL_DATA_PATH/tutorial_NW_atlantic_parallel/in_mom6_ref/NWA12_demo_ocean_geometry.nc
 
 # Directory containing observation files
-obs_seq_in_folder: $TUTORIAL_DATA_PATH/tutorial_1/in_CrocoLake/
+obs_seq_in_folder: $TUTORIAL_DATA_PATH/tutorial_NW_atlantic_parallel/in_CrocoLake/
 
 ####### OUTPUT FILES #######
 # Output directories for processed files (will be created if it doesn't exist)
-output_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/out_obs_seq_in/
-input_nml_bck: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/input_bckp/
-trimmed_obs_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/out_trimmed_obs_seq_in/
-parquet_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/out_parquet/
-tmp_folder: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/tmp/
+output_folder: $TUTORIAL_DATA_PATH/output/tutorial_NW_atlantic_parallel/out_obs_seq_in/
+input_nml_bck: $TUTORIAL_DATA_PATH/output/tutorial_NW_atlantic_parallel/input_bckp/
+trimmed_obs_folder: $TUTORIAL_DATA_PATH/output/tutorial_NW_atlantic_parallel/out_trimmed_obs_seq_in/
+parquet_folder: $TUTORIAL_DATA_PATH/output/tutorial_NW_atlantic_parallel/out_parquet/
+tmp_folder: $TUTORIAL_DATA_PATH/output/tutorial_NW_atlantic_parallel/tmp/
 
 ####### DART #######
 # Path to DART's perfect model obs executable
@@ -70,5 +75,5 @@ layer_name: zl
 # model2obs writes concise progress to screen and detailed diagnostics to a run log.
 # Default (if unset): <output_folder>/model2obs.log
 # Optional override example (full path):
-log_file: $TUTORIAL_DATA_PATH/output/tutorial_1_parallel/logs/model2obs.log
+log_file: $TUTORIAL_DATA_PATH/output/tutorial_NW_atlantic_parallel/logs/model2obs.log
 
